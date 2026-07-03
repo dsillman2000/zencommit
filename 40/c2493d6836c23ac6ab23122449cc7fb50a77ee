@@ -1,0 +1,26 @@
+src/index.ts
+  s_2d740d0488e47c::t_f8556526caeeb1 8,17-18,27-29
+  s_2d740d0488e47c::t_fd3137fbe66386 30
+README.md
+  s_2d740d0488e47c::t_14cfcee34534cf 1-33
+src/commands/config.ts
+  s_2d740d0488e47c::t_d9669478fa6ab7 1-96
+src/config.ts
+  s_2d740d0488e47c::t_918abed20f2edc 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "40c2493d6836c23ac6ab23122449cc7fb50a77ee",
+  "prompts": {},
+  "sessions": {
+    "s_2d740d0488e47c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0d794a3adffevQjIRyFhTvDhvx",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
