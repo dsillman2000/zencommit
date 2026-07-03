@@ -17,14 +17,6 @@ program
 
 program.addCommand(configCommand);
 
-program
-  .command("greet")
-  .description("Test the CLI is working")
-  .argument("[name]", "Name to greet", "World")
-  .action((name: string) => {
-    console.log(`Hello, ${name}!`);
-  });
-
 program.action(async () => {
   await run();
 });
