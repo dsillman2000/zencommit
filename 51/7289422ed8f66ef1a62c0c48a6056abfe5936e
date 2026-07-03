@@ -1,0 +1,27 @@
+tsconfig.json
+  s_2d740d0488e47c::t_afe33bdc8c2a11 1-19
+.gitignore
+  s_2d740d0488e47c::t_247cb9e96c2448 1-4
+package.json
+  s_2d740d0488e47c::t_89e00fbcd0856f 1-28
+src/index.ts
+  s_2d740d0488e47c::t_0fb432ef070d7d 1-24
+package-lock.json
+  s_2d740d0488e47c::t_b092e755f110a3 1-898
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "517289422ed8f66ef1a62c0c48a6056abfe5936e",
+  "prompts": {},
+  "sessions": {
+    "s_2d740d0488e47c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0d794a3adffevQjIRyFhTvDhvx",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
