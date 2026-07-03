@@ -1,0 +1,14 @@
+tsconfig.json
+  h_4cc74772b10fd4 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8b15642a5b30f15eb1391af7b1112a94fc6ff358",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
