@@ -13,12 +13,14 @@ const program = new Command();
 program
   .name("zencommit")
   .description("AI-powered commit message generator")
-  .version("0.1.0");
+  .version("0.1.0")
+  .option("-m, --model <model>", "Override the model from config")
+  .option("-y, --yes", "Auto-accept commit suggestions without prompting");
 
 program.addCommand(configCommand);
 
-program.action(async () => {
-  await run();
+program.action(async (options) => {
+  await run({ modelOverride: options.model as string | undefined, yes: options.yes as boolean });
 });
 
 program.parse();

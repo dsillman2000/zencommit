@@ -94,9 +94,9 @@ function validateCommits(commits: CommitEntry[]): string[] {
   return errors;
 }
 
-export async function run(): Promise<void> {
+export async function run(opts?: { modelOverride?: string; yes?: boolean }): Promise<void> {
   try {
-    await runInternal();
+    await runInternal(opts);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error: ${message}`);
@@ -104,7 +104,7 @@ export async function run(): Promise<void> {
   }
 }
 
-async function runInternal(): Promise<void> {
+async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Promise<void> {
   const config = await readConfig();
 
   if (!config.key) {
@@ -113,7 +113,9 @@ async function runInternal(): Promise<void> {
     process.exit(1);
   }
 
-  if (!config.model) {
+  const modelName = opts?.modelOverride ?? config.model;
+
+  if (!modelName) {
     console.error("Error: Model not configured.");
     console.error("Run: zencommit config set model <model-name>");
     process.exit(1);
@@ -142,9 +144,9 @@ async function runInternal(): Promise<void> {
     apiKey: config.key,
   });
 
-  const model = provider(config.model);
+  const model = provider(modelName);
 
-  console.log(`Generating commit messages using ${config.model}...`);
+  console.log(`Generating commit messages using ${modelName}...`);
 
   let result;
   try {
@@ -195,7 +197,7 @@ async function runInternal(): Promise<void> {
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question("Apply these commits? [y/N] ");
+  const answer = opts?.yes ? "y" : await rl.question("Apply these commits? [y/N] ");
   rl.close();
 
   if (!answer.toLowerCase().startsWith("y")) {

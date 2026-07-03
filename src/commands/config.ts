@@ -3,6 +3,46 @@ import { readConfig, writeConfig, getConfigPath } from "../config.js";
 
 const MODELS_URL = "https://opencode.ai/zen/v1/models";
 
+const G = "\x1b[32m";
+const R = "\x1b[31m";
+const Z = "\x1b[0m";
+
+async function validateApiKey(key: string | undefined): Promise<boolean> {
+  if (!key) {
+    console.log(`${R}FAIL${Z}  API key — not configured (run: zencommit config set key <your-key>)`);
+    return false;
+  }
+  console.log(`${G}PASS${Z}  API key — configured`);
+  return true;
+}
+
+async function validateModel(model: string | undefined): Promise<boolean> {
+  if (!model) {
+    console.log(`${R}FAIL${Z}  Model — not configured (run: zencommit config set model <model-name>)`);
+    return false;
+  }
+  try {
+    const response = await fetch(MODELS_URL);
+    if (!response.ok) {
+      console.log(`${R}FAIL${Z}  Model — unable to fetch model list (HTTP ${response.status})`);
+      return false;
+    }
+    const data = (await response.json()) as { data?: { id: string }[]; models?: { id: string }[] };
+    const models: { id: string }[] = data.data ?? data.models ?? [];
+    const modelIds = new Set(models.map((m) => m.id));
+    if (modelIds.has(model)) {
+      console.log(`${G}PASS${Z}  Model "${model}" — available`);
+      return true;
+    }
+    console.log(`${R}FAIL${Z}  Model "${model}" — not found in available models`);
+    console.log(`      Available models: ${[...modelIds].join(", ") || "(none)"}`);
+    return false;
+  } catch {
+    console.log(`${R}FAIL${Z}  Model — network error fetching model list`);
+    return false;
+  }
+}
+
 export const configCommand = new Command("config")
   .description("Manage zencommit configuration");
 
@@ -15,7 +55,11 @@ configCommand
     const config = await readConfig();
     config[key] = value;
     await writeConfig(config);
-    console.log(`Set ${key} = ${value}`);
+    if (key === "key") {
+      await validateApiKey(value);
+    } else if (key === "model") {
+      await validateModel(value);
+    }
   });
 
 configCommand
@@ -50,44 +94,10 @@ configCommand
   .description("Validate API key and model availability")
   .action(async () => {
     const config = await readConfig();
-    let allPassed = true;
+    const keyOk = await validateApiKey(config.key);
+    const modelOk = await validateModel(config.model);
 
-    if (!config.key) {
-      console.log("FAIL  API key — not configured (run: zencommit config set key <your-key>)");
-      allPassed = false;
-    } else {
-      console.log("PASS  API key — configured");
-    }
-
-    if (!config.model) {
-      console.log("FAIL  Model — not configured (run: zencommit config set model <model-name>)");
-      allPassed = false;
-    } else {
-      try {
-        const response = await fetch(MODELS_URL);
-        if (!response.ok) {
-          console.log(`FAIL  Model — unable to fetch model list (HTTP ${response.status})`);
-          allPassed = false;
-        } else {
-          const data = (await response.json()) as { data?: { id: string }[]; models?: { id: string }[] };
-          const models: { id: string }[] = data.data ?? data.models ?? [];
-          const modelIds = new Set(models.map((m) => m.id));
-
-          if (modelIds.has(config.model!)) {
-            console.log(`PASS  Model "${config.model}" — available`);
-          } else {
-            console.log(`FAIL  Model "${config.model}" — not found in available models`);
-            console.log(`      Available models: ${[...modelIds].join(", ") || "(none)"}`);
-            allPassed = false;
-          }
-        }
-      } catch {
-        console.log("FAIL  Model — network error fetching model list");
-        allPassed = false;
-      }
-    }
-
-    if (allPassed) {
+    if (keyOk && modelOk) {
       console.log("\nAll checks passed.");
     } else {
       console.log("\nSome checks failed. See above for details.");
