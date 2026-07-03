@@ -11,6 +11,32 @@ import { tools } from "./tools/index.js";
 const cwd = process.cwd();
 const git = simpleGit(cwd);
 
+const Z = "\x1b[0m";
+const B = "\x1b[1m";
+const D = "\x1b[2m";
+
+const typeColor: Record<string, string> = {
+  feat: "\x1b[36m",    fix: "\x1b[33m",     docs: "\x1b[34m",
+  style: "\x1b[35m",   refactor: "\x1b[32m", perf: "\x1b[31m",
+  test: "\x1b[32m",    chore: "\x1b[2m",     ci: "\x1b[2m",
+  build: "\x1b[2m",    revert: "\x1b[31m",
+};
+
+function startSpinner(message: string) {
+  const chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stdout.write(`\r\x1b[K${chars[i % chars.length]} ${message}`);
+    i++;
+  }, 80);
+  return {
+    stop: () => {
+      clearInterval(interval);
+      process.stdout.write("\r\x1b[K");
+    },
+  };
+}
+
 interface CommitEntry {
   type: string;
   scope?: string;
@@ -62,18 +88,26 @@ async function loadAgentsMd(): Promise<string> {
   }
 }
 
-function formatCommit(entry: CommitEntry, index: number): string {
-  const header = entry.scope
-    ? `${entry.type}(${entry.scope}): ${entry.description}`
-    : `${entry.type}: ${entry.description}`;
-  const files = entry.files.map((f) => `  ${f}`).join("\n");
-  return `Commit ${index + 1}: ${header}\nFiles:\n${files}`;
+function header(entry: CommitEntry): string {
+  const c = typeColor[entry.type] ?? "";
+  return entry.scope
+    ? `${c}${entry.type}${Z}(${entry.scope}): ${entry.description}`
+    : `${c}${entry.type}${Z}: ${entry.description}`;
 }
 
-function formatCommitMessage(entry: CommitEntry): string {
+function message(entry: CommitEntry): string {
   return entry.scope
     ? `${entry.type}(${entry.scope}): ${entry.description}`
     : `${entry.type}: ${entry.description}`;
+}
+
+function renderCommit(entry: CommitEntry, index: number): string {
+  const lines = [
+    `\n ${B}${String(index + 1).padStart(2, " ")}.${Z} ${header(entry)}`,
+    ` ${D}Files${Z}`,
+    ...entry.files.map((f) => `    ${D}•${Z} ${f}`),
+  ];
+  return lines.join("\n");
 }
 
 function validateCommits(commits: CommitEntry[]): string[] {
@@ -145,8 +179,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Pr
   });
 
   const model = provider(modelName);
-
-  console.log(`Generating commit messages using ${modelName}...`);
+  const spinner = startSpinner("Analyzing changes...");
 
   let result;
   try {
@@ -159,10 +192,13 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Pr
       experimental_output: Output.object({ schema: commitSchema }),
     });
   } catch (err) {
+    spinner.stop();
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Error: ${message}`);
     process.exit(1);
   }
+
+  spinner.stop();
 
   if (!result.experimental_output) {
     console.error("Error: No commit messages generated.");
@@ -184,17 +220,17 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Pr
     }
     console.error("\nGenerated commits were:");
     for (let i = 0; i < commits.length; i++) {
-      console.error(formatCommit(commits[i], i));
-      console.error();
+      console.error(renderCommit(commits[i], i));
     }
+    console.error();
     process.exit(1);
   }
 
-  console.log();
+  console.log("━".repeat(48));
   for (let i = 0; i < commits.length; i++) {
-    console.log(formatCommit(commits[i], i));
-    console.log();
+    console.log(renderCommit(commits[i], i));
   }
+  console.log("\n" + "━".repeat(48) + "\n");
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = opts?.yes ? "y" : await rl.question("Apply these commits? [y/N] ");
@@ -207,8 +243,8 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Pr
 
   for (const entry of commits) {
     await git.add(entry.files);
-    await git.commit(formatCommitMessage(entry));
+    await git.commit(message(entry));
   }
 
-  console.log(`\nCommitted ${commits.length} commit(s).`);
+  console.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
 }
