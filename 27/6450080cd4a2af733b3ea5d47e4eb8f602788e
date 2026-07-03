@@ -1,0 +1,35 @@
+src/tools/index.ts
+  s_2d740d0488e47c::t_80838fabbd6e07 1-10
+src/zencommit.ts
+  s_2d740d0488e47c::t_de79f0e46fee3e 98-107
+  s_2d740d0488e47c::t_84d35fc478664a 149-163
+  s_2d740d0488e47c::t_c70e7dd4b56f38 7
+  s_2d740d0488e47c::t_74e2bd982f93d1 1-6,8-97,108-148,164-212
+src/index.ts
+  s_2d740d0488e47c::t_17fb4227e6d752 9,28-29
+src/tools/file-tools.ts
+  s_2d740d0488e47c::t_685f4f2e6f9f11 1-32
+package.json
+  s_2d740d0488e47c::t_e0185fae96d551 21-23
+src/tools/git-tools.ts
+  s_2d740d0488e47c::t_70a855cfa26d81 3
+  s_2d740d0488e47c::t_78a7bc93666ffa 1-2,4-92
+package-lock.json
+  s_2d740d0488e47c::t_a7434627b2f039 16-18,605-619,629-643,707-723,819-824,859-875
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "276450080cd4a2af733b3ea5d47e4eb8f602788e",
+  "prompts": {},
+  "sessions": {
+    "s_2d740d0488e47c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0d794a3adffevQjIRyFhTvDhvx",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
