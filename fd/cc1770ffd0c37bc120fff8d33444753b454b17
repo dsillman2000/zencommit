@@ -1,0 +1,19 @@
+src/zencommit.ts
+  s_2d740d0488e47c::t_2fbf9157e02cb2 14-39,91-95,98,104-112,182,195,201-202,223,225,229,231,233,246,249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fdcc1770ffd0c37bc120fff8d33444753b454b17",
+  "prompts": {},
+  "sessions": {
+    "s_2d740d0488e47c": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0d794a3adffevQjIRyFhTvDhvx",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
