@@ -6,6 +6,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { configCommand } from "./commands/config.js";
+import { run } from "./zencommit.js";
 
 const program = new Command();
 
@@ -24,8 +25,8 @@ program
     console.log(`Hello, ${name}!`);
   });
 
-program.action(() => {
-  console.log("Hello, World!");
+program.action(async () => {
+  await run();
 });
 
 program.parse();
