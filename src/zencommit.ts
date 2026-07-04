@@ -1,4 +1,4 @@
-import { generateText, Output } from "ai";
+import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import { createInterface } from "node:readline/promises";
@@ -77,7 +77,12 @@ const SYSTEM_PROMPT = `You are an expert at writing conventional commit messages
 - Group logically related file changes into a single commit
 - Split clearly independent changes into separate commits only when warranted
 - There can be at most as many commits as there are changed files
-- If the AGENTS.md section below specifies conventions, follow them`;
+- If the AGENTS.md section below specifies conventions, follow them
+
+**Critical Output Format**
+- Your final response MUST be raw, valid JSON and nothing else.
+- Do NOT wrap the JSON in markdown code fences (no \`\`\`json or \`\`\`).
+- The response must start with { and end with } — pure JSON, no prefix, no suffix.`;
 
 async function loadAgentsMd(): Promise<string> {
   try {
@@ -128,7 +133,21 @@ function validateCommits(commits: CommitEntry[]): string[] {
   return errors;
 }
 
-export async function run(opts?: { modelOverride?: string; yes?: boolean }): Promise<void> {
+function stripMarkdownJsonFences(text: string): string {
+  let stripped = text.trim();
+  if (stripped.startsWith("```")) {
+    const firstNewline = stripped.indexOf("\n");
+    if (firstNewline !== -1) {
+      stripped = stripped.slice(firstNewline + 1);
+      if (stripped.endsWith("```")) {
+        stripped = stripped.slice(0, -3).trimEnd();
+      }
+    }
+  }
+  return stripped;
+}
+
+export async function run(opts?: { modelOverride?: string; yes?: boolean; verbose?: boolean }): Promise<void> {
   try {
     await runInternal(opts);
   } catch (err) {
@@ -138,7 +157,7 @@ export async function run(opts?: { modelOverride?: string; yes?: boolean }): Pro
   }
 }
 
-async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Promise<void> {
+async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbose?: boolean }): Promise<void> {
   const config = await readConfig();
 
   if (!config.key) {
@@ -179,26 +198,112 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean }): Pr
   });
 
   const model = provider(modelName);
-  const spinner = startSpinner("Analyzing changes...");
+  const spinner = opts?.verbose ? null : startSpinner("Analyzing changes...");
 
-  let result;
+  let stepNumber = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onStepFinish: ((step: any) => void) | undefined =
+    opts?.verbose
+      ? (step) => {
+          stepNumber++;
+          console.log(`\n${D}Step ${stepNumber} (${step.stepType})${Z}`);
+
+          if (step.text.trim()) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const text: string = step.text;
+            console.log(`${D}│ text:${Z} ${text.trim().split("\n").join(`\n${D}│      ${Z}`)}`);
+          }
+
+          if (step.reasoning?.trim()) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const reasoning: string = step.reasoning;
+            console.log(`${D}│ reasoning:${Z} ${reasoning.trim().split("\n").join(`\n${D}│            ${Z}`)}`);
+          }
+
+          if (step.toolCalls.length > 0) {
+            console.log(`${D}│ tool calls:${Z}`);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const tc of step.toolCalls as any[]) {
+              const argsStr = JSON.stringify(tc.args);
+              const truncated = argsStr.length > 300 ? argsStr.slice(0, 300) + "…" : argsStr;
+              console.log(`${D}│   •${Z} ${tc.toolName}(${truncated})`);
+            }
+          }
+
+          if (step.toolResults.length > 0) {
+            console.log(`${D}│ tool results:${Z}`);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const tr of step.toolResults as any[]) {
+              const raw = tr.result;
+              const resultStr = typeof raw === "string" ? raw : JSON.stringify(raw);
+              const truncated = resultStr.length > 120 ? resultStr.slice(0, 120) + `…${D} (truncated)${Z}` : resultStr;
+              console.log(`${D}│   •${Z} ${tr.toolName}: ${truncated.split("\n").join(`\n${D}│     ${Z}`)}`);
+            }
+          }
+        }
+      : undefined;
+
+  if (opts?.verbose) {
+    console.log(`${D}─── Verbose agent logs ───${Z}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result: any;
+  let recovered = false;
   try {
     result = await generateText({
       model,
       system: SYSTEM_PROMPT + agentsMdContent,
-      prompt: "Analyze the current git working tree and produce conventional commit messages for all changes.",
+      prompt: "Analyze the current git working tree and produce conventional commit messages for all changes. Respond with raw JSON only, no markdown fences.",
       tools,
       maxSteps: 6,
       experimental_output: Output.object({ schema: commitSchema }),
+      onStepFinish,
     });
   } catch (err) {
-    spinner.stop();
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: ${message}`);
-    process.exit(1);
+    spinner?.stop();
+    if (NoObjectGeneratedError.isInstance(err) && err.text) {
+      try {
+        const stripped = stripMarkdownJsonFences(err.text);
+        const parsed = commitSchema.safeParse(JSON.parse(stripped));
+        if (parsed.success) {
+          result = { experimental_output: parsed.data, usage: err.usage, steps: [] };
+          recovered = true;
+        } else {
+          if (opts?.verbose) {
+            console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`Error: ${message}`);
+          process.exit(1);
+        }
+      } catch {
+        if (opts?.verbose) {
+          console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Error: ${message}`);
+        process.exit(1);
+      }
+    } else {
+      if (opts?.verbose) {
+        console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${message}`);
+      process.exit(1);
+    }
   }
 
-  spinner.stop();
+  spinner?.stop();
+
+  if (opts?.verbose) {
+    if (recovered) {
+      console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps, ${result.usage?.totalTokens ?? "?"} tokens, recovered from markdown fences) ───${Z}\n`);
+    } else {
+      console.log(`\n${D}─── End verbose agent logs (${result.steps.length} steps, ${result.usage.totalTokens} tokens) ───${Z}\n`);
+    }
+  }
 
   if (!result.experimental_output) {
     console.error("Error: No commit messages generated.");
