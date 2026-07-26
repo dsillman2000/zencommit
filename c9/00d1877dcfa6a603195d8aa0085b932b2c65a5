@@ -1,0 +1,19 @@
+AGENTS.md
+  s_bf8be0d2ccd34b::t_b5392208ecb26b 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c900d1877dcfa6a603195d8aa0085b932b2c65a5",
+  "prompts": {},
+  "sessions": {
+    "s_bf8be0d2ccd34b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_063f8b24fffeSm1z2i220LXGkb",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
