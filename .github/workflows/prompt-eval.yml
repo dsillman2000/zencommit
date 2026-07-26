@@ -47,13 +47,14 @@ jobs:
       - name: Configure API key
         env:
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
-        run: node -e "
+        run: |
+          node -e "
           const { mkdirSync, writeFileSync } = require('fs');
           const { join, homedir } = require('path');
           const dir = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'zencommit');
           mkdirSync(dir, { recursive: true });
           writeFileSync(join(dir, 'config.json'), JSON.stringify({ key: process.env.OPENCODE_ZEN_API_KEY }, null, 2));
-        "
+          "
 
       - name: Run integration tests
         env:
