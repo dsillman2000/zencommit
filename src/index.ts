@@ -1,10 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { configCommand } from "./commands/config.js";
 import { run } from "./zencommit.js";
 

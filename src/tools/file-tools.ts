@@ -29,7 +29,7 @@ export const readFile = tool({
       raw = await fsReadFile(resolved, "utf-8");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to read file "${path}": ${message}`);
+      throw new Error(`Failed to read file "${path}": ${message}`, { cause: err });
     }
 
     if (raw.length <= READ_FILE_CAP) return raw;

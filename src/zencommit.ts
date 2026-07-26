@@ -557,7 +557,7 @@ async function runReplan({
         onStepFinish: onStep,
       });
       if (!retryResult.experimental_output) {
-        throw new Error("model could not produce a valid plan on retry");
+        throw new Error("model could not produce a valid plan on retry", { cause: err });
       }
       return retryResult.experimental_output.commits as CommitEntry[];
     }
