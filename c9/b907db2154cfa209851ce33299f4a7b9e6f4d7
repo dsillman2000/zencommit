@@ -1,0 +1,26 @@
+src/zencommit.ts
+  s_170f7049b99d07::t_5e5e37c0d35941 724
+  s_170f7049b99d07::t_e922b90e67aef7 756
+src/tools/file-tools.test.ts
+  s_170f7049b99d07::t_bdf207e447e4f3 1-35
+src/tools/git-tools.ts
+  s_170f7049b99d07::t_1eaa0e9973785d 9,12-19
+src/tools/git-tools.test.ts
+  s_170f7049b99d07::t_5da50841cb4b3b 1-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c9b907db2154cfa209851ce33299f4a7b9e6f4d7",
+  "prompts": {},
+  "sessions": {
+    "s_170f7049b99d07": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_061bf2c38ffeB19C0aklc6KJNA",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
