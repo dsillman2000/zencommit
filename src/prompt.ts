@@ -19,7 +19,14 @@ const TOTAL_DIFF_BUDGET = 32 * 1024;
 const MAX_FILES_FOR_DIFF = 50;
 
 const cwd = process.cwd();
-const git = simpleGit(cwd);
+let git = simpleGit(cwd);
+
+/** @internal Replace the git instance for testing. */
+export function __setGit(newGit: typeof git): typeof git {
+  const prev = git;
+  git = newGit;
+  return prev;
+}
 
 /**
  * Normalised view of the files changed in the working tree.
@@ -100,7 +107,7 @@ function truncateTo(text: string, maxChars: number): { text: string; truncated: 
  * @param untracked - Set of files marked as untracked.
  * @returns A diff string or a human-readable status message.
  */
-async function diffForFile(file: string, deletedFiles: Set<string>, untracked: Set<string>): Promise<string> {
+export async function diffForFile(file: string, deletedFiles: Set<string>, untracked: Set<string>): Promise<string> {
   try {
     if (deletedFiles.has(file)) {
       return "(deleted from working tree)";

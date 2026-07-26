@@ -1,9 +1,12 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect, jest, beforeEach, afterAll } from "@jest/globals";
 import {
   changedFilesFromStatus,
   allChangedPaths,
   formatChangedFiles,
   formatDiffSections,
+  buildDiffSections,
+  precomputeContext,
+  __setGit,
   type ChangedFiles,
   type DiffSection,
 } from "./prompt.js";
@@ -25,6 +28,21 @@ function makeStatus(overrides?: Partial<{
     renamed: overrides?.renamed ?? [],
   } as never;
 }
+
+const mockGit = {
+  diff: jest.fn<(...args: string[]) => Promise<string>>(),
+};
+
+let prevGit: ReturnType<typeof __setGit>;
+
+beforeEach(() => {
+  prevGit = __setGit(mockGit as never);
+  mockGit.diff.mockReset();
+});
+
+afterAll(() => {
+  __setGit(prevGit);
+});
 
 describe("changedFilesFromStatus", () => {
   it("converts a StatusResult to ChangedFiles", () => {
@@ -194,6 +212,146 @@ describe("formatDiffSections", () => {
     ];
     const output = formatDiffSections(sections, true);
     expect(output).toContain("diff budget reached");
+  });
+});
+
+describe("diffForFile (indirectly via buildDiffSections)", () => {
+  it("returns diff for a tracked file", async () => {
+    mockGit.diff.mockResolvedValue("+\nnew content");
+    const files: ChangedFiles = {
+      staged: ["a.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0]).toMatchObject({ diff: "+\nnew content", truncated: false });
+  });
+
+  it("falls back to unstaged diff when HEAD diff is empty", async () => {
+    mockGit.diff
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("+\nunstaged");
+    const files: ChangedFiles = {
+      staged: ["a.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0].diff).toBe("+\nunstaged");
+  });
+
+  it("returns no-textual-changes message when both diffs are empty", async () => {
+    mockGit.diff
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("");
+    const files: ChangedFiles = {
+      staged: ["a.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0].diff).toBe("(no textual changes)");
+  });
+
+  it("returns deleted message without calling git", async () => {
+    const files: ChangedFiles = {
+      staged: [], modified: [], deleted: ["d.ts"], created: [], untracked: [], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0].diff).toBe("(deleted from working tree)");
+    expect(mockGit.diff).not.toHaveBeenCalled();
+  });
+
+  it("returns untracked message without calling git", async () => {
+    const files: ChangedFiles = {
+      staged: [], modified: [], deleted: [], created: [], untracked: ["u.ts"], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0].diff).toBe("(untracked; no HEAD diff available)");
+    expect(mockGit.diff).not.toHaveBeenCalled();
+  });
+
+  it("returns diff-failed message when git throws", async () => {
+    mockGit.diff.mockRejectedValue(new Error("boom"));
+    const files: ChangedFiles = {
+      staged: ["a.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections[0].diff).toBe("(diff failed: boom)");
+  });
+});
+
+describe("buildDiffSections budget behavior", () => {
+  it("handles nonempty sections under the total budget", async () => {
+    mockGit.diff.mockResolvedValue("short");
+    const files: ChangedFiles = {
+      staged: ["a.ts", "b.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections, capHit } = await buildDiffSections(files);
+    expect(sections).toHaveLength(2);
+    expect(capHit).toBe(false);
+    expect(sections[0].omitted).toBeUndefined();
+    expect(sections[1].omitted).toBeUndefined();
+  });
+
+  it("truncates a diff that exceeds the per-file budget", async () => {
+    mockGit.diff.mockResolvedValue("x".repeat(5000));
+    const files: ChangedFiles = {
+      staged: ["big.ts"], modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections, capHit } = await buildDiffSections(files);
+    expect(sections).toHaveLength(1);
+    expect(capHit).toBe(false);
+    expect(sections[0].truncated).toBe(true);
+    expect(sections[0].diff.length).toBe(4096);
+  });
+
+  it("omits remaining files when the total budget is exceeded", async () => {
+    const fileCount = 9;
+    mockGit.diff.mockResolvedValue("x".repeat(4096));
+    const files: ChangedFiles = {
+      staged: Array.from({ length: fileCount }, (_, i) => `f${i}.ts`),
+      modified: [], deleted: [], created: [], untracked: [], renamed: [],
+    };
+    const { sections, capHit } = await buildDiffSections(files);
+    expect(sections).toHaveLength(fileCount);
+    expect(capHit).toBe(true);
+    expect(sections[0].omitted).toBeUndefined();
+    expect(sections[fileCount - 1]).toMatchObject({ path: "f8.ts", omitted: true, truncated: true });
+    expect(sections[fileCount - 1].diff).toContain("diff omitted");
+    expect(sections[fileCount - 1].diff).toContain("f8.ts");
+  });
+
+  it("includes renamed files by their destination path", async () => {
+    mockGit.diff.mockResolvedValue("+\nmoved content");
+    const files: ChangedFiles = {
+      staged: [], modified: [], deleted: [], created: [], untracked: [], renamed: [{ from: "old.ts", to: "new.ts" }],
+    };
+    const { sections } = await buildDiffSections(files);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].path).toBe("new.ts");
+  });
+});
+
+describe("precomputeContext", () => {
+  it("builds context for nonempty status with diffs", async () => {
+    mockGit.diff.mockResolvedValue("+\ncontent");
+    const status = makeStatus({
+      staged: ["a.ts"],
+      modified: ["b.ts"],
+    });
+    const ctx = await precomputeContext(status as never);
+    expect(ctx.allChangedPaths).toEqual(["a.ts", "b.ts"]);
+    expect(ctx.diffSections).toHaveLength(2);
+    expect(ctx.diffCapHit).toBe(false);
+    expect(ctx.formatted.files).toContain("Staged:");
+    expect(ctx.formatted.files).toContain("Modified (unstaged):");
+    expect(ctx.formatted.files).not.toContain("Deleted");
+    expect(ctx.formatted.diffs).toContain("--- a.ts ---");
+    expect(ctx.formatted.diffs).toContain("--- b.ts ---");
+  });
+
+  it("handles empty status gracefully", async () => {
+    const ctx = await precomputeContext(makeStatus({}) as never);
+    expect(ctx.allChangedPaths).toEqual([]);
+    expect(ctx.diffSections).toHaveLength(0);
+    expect(ctx.diffCapHit).toBe(false);
+    expect(ctx.formatted.files).toBe("(none)");
+    expect(ctx.formatted.diffs).toBe("(no diffs)");
   });
 });
 
