@@ -11,6 +11,7 @@
 import { Command } from "commander";
 import { configCommand } from "./commands/config.js";
 import { run } from "./zencommit.js";
+import { listModels } from "./models.js";
 
 const program = new Command();
 
@@ -24,6 +25,19 @@ program
   .option("-p, --prompt <prompt>", "Inject a custom instruction into the user prompt");
 
 program.addCommand(configCommand);
+
+program
+  .command("models")
+  .description("List available OpenCode Zen models and their per-1M-token pricing")
+  .action(async () => {
+    try {
+      await listModels();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${message}`);
+      process.exit(1);
+    }
+  });
 
 program.action(async (options) => {
   await run({
