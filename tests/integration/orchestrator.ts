@@ -95,6 +95,38 @@ function mean(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
+function summarizeTrial(trial: TrialResult): string {
+  const wall = (trial.spawnWallMs / 1000).toFixed(1) + "s";
+  if (trial.ok && trial.report) {
+    const inner = (trial.report.metrics.totalMs / 1000).toFixed(1) + "s";
+    const tokens = trial.report.calls.find((c) => c.usage)?.usage?.totalTokens ?? 0;
+    const tools = trial.report.calls.reduce(
+      (sum, c) => sum + c.steps.reduce((s, st) => s + st.toolCalls.length, 0),
+      0,
+    );
+    const repairs =
+      "formatRepairs" in trial.report.result
+        ? (trial.report.result as { formatRepairs: number }).formatRepairs +
+          (trial.report.result as { coverageRetries: number }).coverageRetries
+        : 0;
+    return `OK  wall=${wall} inner=${inner}  ${tokens}tok  ${tools}tools  ${repairs}rep`;
+  }
+  if (trial.parseError) {
+    const firstLine = trial.parseError.split("\n")[0].slice(0, 60);
+    if (trial.spawnExitCode === null) {
+      return `SPAWN FAIL  wall=${wall}  ${firstLine}`;
+    }
+    return `PARSE FAIL  wall=${wall}  ${firstLine}`;
+  }
+  if (!trial.ok && trial.report) {
+    const err = trial.report.result;
+    if ("error" in err) {
+      return `FAIL  wall=${wall}  ${err.error.phase}: ${err.error.message.slice(0, 50)}`;
+    }
+  }
+  return `FAIL  wall=${wall}`;
+}
+
 export async function runIntegration(): Promise<AggregatedResults> {
   const config = readConfig();
   const cliPath = resolve(projectRoot(), "dist", "index.js");
@@ -110,8 +142,11 @@ export async function runIntegration(): Promise<AggregatedResults> {
   const totalTrials = config.models.length * config.trialsPerModel;
   let trialIndex = 0;
 
-  for (const model of config.models) {
-    for (let t = 1; t <= config.trialsPerModel; t++) {
+  // Round-robin: iterate trial index in the outer loop, models in the inner
+  // loop. This interleaves models so no model is always first/last and
+  // server-side caching/warming effects are spread evenly across models.
+  for (let t = 1; t <= config.trialsPerModel; t++) {
+    for (const model of config.models) {
       trialIndex++;
       const scenario = await loadScenario(config.projectType, config.scenario);
 
@@ -145,7 +180,7 @@ export async function runIntegration(): Promise<AggregatedResults> {
 
       if (result.error) {
         trial.parseError = `spawn error: ${result.error.message}`;
-        process.stderr.write("SPAWN FAIL\n");
+        process.stderr.write(summarizeTrial(trial) + "\n");
       } else {
         const stdout = (result.stdout ?? "").trim();
         const parsed = StatsReportSchema.safeParse(
@@ -153,8 +188,10 @@ export async function runIntegration(): Promise<AggregatedResults> {
             try {
               return JSON.parse(stdout);
             } catch {
-              trial.parseError = `JSON parse error on stdout (${stdout.length} chars)`;
-              trial.parseError += `\nstderr: ${(result.stderr ?? "").slice(0, 200)}`;
+              trial.parseError =
+                `JSON parse error on stdout (${stdout.length} chars)\n` +
+                `stdout preview: ${stdout.slice(0, 300)}\n` +
+                `stderr: ${(result.stderr ?? "").slice(0, 300)}`;
               return null;
             }
           })(),
@@ -163,12 +200,14 @@ export async function runIntegration(): Promise<AggregatedResults> {
         if (parsed.success) {
           trial.report = parsed.data;
           trial.ok = parsed.data.ok;
-          process.stderr.write(trial.ok ? "OK\n" : "FAIL\n");
+          process.stderr.write(summarizeTrial(trial) + "\n");
         } else {
-          trial.parseError = parsed.error instanceof Error
-            ? parsed.error.message
-            : "schema validation error";
-          process.stderr.write("PARSE FAIL\n");
+          trial.parseError =
+            (parsed.error instanceof Error
+              ? parsed.error.message
+              : "schema validation error") +
+            `\nstdout preview: ${stdout.slice(0, 300)}`;
+          process.stderr.write(summarizeTrial(trial) + "\n");
         }
       }
 

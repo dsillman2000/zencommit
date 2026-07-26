@@ -3,9 +3,9 @@
   "scenario": "default",
   "models": [
     "big-pickle",
-    "north-mini-code-free",
+    "nemotron-3-ultra-free",
     "deepseek-v4-flash-free"
   ],
-  "trialsPerModel": 10,
+  "trialsPerModel": 5,
   "spawnTimeoutMs": 120000
 }

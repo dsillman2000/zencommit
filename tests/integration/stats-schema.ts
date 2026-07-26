@@ -35,7 +35,7 @@ export const CallRecordSchema = z.object({
     totalTokens: z.number(),
   }).optional(),
   finishReason: z.string().optional(),
-  warnings: z.array(z.string()).optional(),
+  warnings: z.array(z.unknown()).optional(),
   text: z.string().optional(),
   reasoning: z.string().optional(),
   steps: z.array(StepRecordSchema),
@@ -63,7 +63,7 @@ export const DiffSectionSchema = z.object({
 
 export const CommitEntrySchema = z.object({
   type: z.string(),
-  scope: z.string().optional(),
+  scope: z.string().nullable().optional(),
   description: z.string(),
   files: z.array(z.string()),
 });
