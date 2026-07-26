@@ -47,6 +47,7 @@ jobs:
       - name: Run integration tests
         env:
           OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+          RUN_INTEGRATION_TESTS: "1"
         run: npm run test:integration
 
       - name: Generate evaluation report
