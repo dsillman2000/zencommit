@@ -37,12 +37,14 @@ const typeColor: Record<string, string> = {
 interface SpinnerHandle {
   update: (message: string) => void;
   stop: () => void;
+  isRunning: () => boolean;
 }
 
 function startSpinner(message: string): SpinnerHandle {
   const chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   let i = 0;
   let current = message;
+  let running = true;
   const interval = setInterval(() => {
     process.stdout.write(`\r\x1b[K${chars[i % chars.length]} ${current}`);
     i++;
@@ -52,9 +54,12 @@ function startSpinner(message: string): SpinnerHandle {
       current = msg;
     },
     stop: () => {
+      if (!running) return;
       clearInterval(interval);
+      running = false;
       process.stdout.write("\r\x1b[K");
     },
+    isRunning: () => running,
   };
 }
 
@@ -105,6 +110,19 @@ function renderCommit(entry: CommitEntry, index: number): string {
   return lines.join("\n");
 }
 
+function renderCommits(commits: CommitEntry[]): void {
+  const bar = "━".repeat(48);
+  console.log(bar);
+  for (let i = 0; i < commits.length; i++) {
+    console.log(renderCommit(commits[i], i));
+  }
+  console.log("\n" + bar + "\n");
+}
+
+function commitsAsJson(commits: CommitEntry[]): string {
+  return JSON.stringify({ commits }, null, 2);
+}
+
 function buildUserPrompt(context: PrefetchedContext): string {
   return [
     "<changed_files>",
@@ -116,6 +134,24 @@ function buildUserPrompt(context: PrefetchedContext): string {
     "</diffs>",
     "",
     "Analyze the above and produce conventional commit messages for all changes.",
+    "Respond with raw JSON only — no markdown fences, no commentary.",
+  ].join("\n");
+}
+
+function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
+  return [
+    buildUserPrompt(context),
+    "",
+    "<previous_plan>",
+    commitsAsJson(currentCommits),
+    "</previous_plan>",
+    "",
+    "<feedback>",
+    feedback,
+    "</feedback>",
+    "",
+    "Revise the commit plan above based on the user's feedback.",
+    "Preserve commits that are still valid; only change entries that the feedback requires.",
     "Respond with raw JSON only — no markdown fences, no commentary.",
   ].join("\n");
 }
@@ -177,7 +213,11 @@ function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => 
   };
 }
 
-export async function run(opts?: { modelOverride?: string; yes?: boolean; verbose?: boolean }): Promise<void> {
+export async function run(opts?: {
+  modelOverride?: string;
+  yes?: boolean;
+  verbose?: boolean;
+}): Promise<void> {
   try {
     await runInternal(opts);
   } catch (err) {
@@ -187,7 +227,11 @@ export async function run(opts?: { modelOverride?: string; yes?: boolean; verbos
   }
 }
 
-async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbose?: boolean }): Promise<void> {
+async function runInternal(opts?: {
+  modelOverride?: string;
+  yes?: boolean;
+  verbose?: boolean;
+}): Promise<void> {
   const config = await readConfig();
 
   if (!config.key) {
@@ -215,10 +259,16 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
     return;
   }
 
+  if (!opts?.yes && !process.stdin.isTTY) {
+    console.error("Error: stdin is not a TTY. Run interactively or pass --yes to bypass the prompt.");
+    process.exit(1);
+  }
+
   const context = await precomputeContext(status);
   const knownFiles = allChangedPaths(context.changedFiles);
 
   const agentsMdContent = await loadAgentsMd();
+  const systemContent = SYSTEM_PROMPT + agentsMdContent;
 
   const provider = createOpenAICompatible({
     name: "zen",
@@ -227,14 +277,18 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   });
 
   const model: LanguageModel = provider(modelName);
-  const spinner = opts?.verbose ? null : startSpinner("Analyzing changes…");
+  let activeSpinner: SpinnerHandle | null = opts?.verbose ? null : startSpinner("Analyzing changes…");
 
   if (opts?.verbose) {
     console.log(`${D}─── Verbose agent logs ───${Z}`);
+    console.log(`${D}│ system prompt:${Z} ${systemContent.length} chars${agentsMdContent ? " (AGENTS.md appended)" : ""}`);
   }
 
   const setLabel = (label: string): void => {
-    spinner?.update(label);
+    activeSpinner?.update(label);
+  };
+  const stopActiveSpinner = (): void => {
+    if (activeSpinner?.isRunning()) activeSpinner.stop();
   };
   const onStepVerbose = verboseStepLogger(Boolean(opts?.verbose), setLabel);
   const onStepQuiet = opts?.verbose ? undefined : quietStepLogger(setLabel);
@@ -246,7 +300,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   try {
     result = await generateText({
       model,
-      system: SYSTEM_PROMPT + agentsMdContent,
+      system: systemContent,
       prompt: buildUserPrompt(context),
       tools,
       maxSteps: 3,
@@ -255,7 +309,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
     });
   } catch (err) {
     if (NoObjectGeneratedError.isInstance(err) && err.text) {
-      spinner?.update("Repairing malformed output…");
+      setLabel("Repairing malformed output…");
       const repaired = repairJSON(err.text);
       if (repaired) {
         const parsed = commitSchema.safeParse(JSON.parse(repaired));
@@ -264,7 +318,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
         }
       }
       if (!result?.experimental_output) {
-        spinner?.update("Retrying with focused feedback…");
+        setLabel("Retrying with focused feedback…");
         const retryPrompt = [
           buildUserPrompt(context),
           "",
@@ -274,7 +328,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
         try {
           result = await generateText({
             model,
-            system: SYSTEM_PROMPT + agentsMdContent,
+            system: systemContent,
             prompt: retryPrompt,
             tools: {},
             maxSteps: 1,
@@ -282,26 +336,27 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
             onStepFinish: onStep,
           });
         } catch (retryErr) {
-          spinner?.stop();
+          stopActiveSpinner();
           const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
           console.error(`Error: failed to parse model output after retry: ${retryMsg}`);
           process.exit(1);
         }
       }
     } else {
-      spinner?.stop();
+      stopActiveSpinner();
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Error: ${message}`);
       process.exit(1);
     }
   }
 
-  spinner?.stop();
-
   if (!result.experimental_output) {
+    stopActiveSpinner();
     console.error("Error: No commit messages generated.");
     process.exit(1);
   }
+
+  stopActiveSpinner();
 
   let commits = result.experimental_output.commits as CommitEntry[];
 
@@ -311,7 +366,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   );
 
   if (hasFileIssue(filesIssue)) {
-    spinner?.update("Correcting file coverage…");
+    setLabel("Correcting file coverage…");
     const retryPrompt = [
       buildUserPrompt(context),
       "",
@@ -321,7 +376,7 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
     try {
       const retryResult = await generateText({
         model,
-        system: SYSTEM_PROMPT + agentsMdContent,
+        system: systemContent,
         prompt: retryPrompt,
         tools: {},
         maxSteps: 1,
@@ -337,45 +392,106 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
         if (!hasFileIssue(retryIssue)) {
           commits = retryCommits;
         } else {
-          spinner?.stop();
+          stopActiveSpinner();
           console.error("Error: model could not produce a valid file-coverage set on retry.");
           logFileIssue(retryIssue);
           process.exit(1);
         }
       }
     } catch (err) {
-      spinner?.stop();
+      stopActiveSpinner();
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Error: file-coverage retry failed: ${message}`);
       process.exit(1);
     }
   }
 
-  spinner?.stop();
+  stopActiveSpinner();
 
   if (opts?.verbose) {
     const totalSteps = result.steps?.length ?? 0;
-    console.log(`\n${D}─── End verbose agent logs (${totalSteps} steps, ${result.usage?.totalTokens ?? "?"} tokens) ───${Z}\n`);
+    console.log(`\n${D}─── End first-pass verbose logs (${totalSteps} steps, ${result.usage?.totalTokens ?? "?"} tokens) ───${Z}\n`);
   }
 
+  let revisionCount = 0;
+
   if (commits.length === 0) {
+    stopActiveSpinner();
     console.log("No commits generated.");
     return;
   }
 
-  console.log("━".repeat(48));
-  for (let i = 0; i < commits.length; i++) {
-    console.log(renderCommit(commits[i], i));
-  }
-  console.log("\n" + "━".repeat(48) + "\n");
+  renderCommits(commits);
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = opts?.yes ? "y" : await rl.question("Apply these commits? [y/N] ");
-  rl.close();
-
-  if (!answer.toLowerCase().startsWith("y")) {
+  const sigintHandler = (): void => {
+    if (activeSpinner?.isRunning()) activeSpinner.stop();
+    if (!opts?.verbose) process.stdout.write("\n");
     console.log("Aborted.");
-    return;
+    process.exit(130);
+  };
+  process.on("SIGINT", sigintHandler);
+
+  let acceptAndCommit = !!opts?.yes;
+
+  try {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+    try {
+      while (!acceptAndCommit) {
+        const answer = await rl.question("Enter to commit · Ctrl+C to abort · feedback: ");
+        const trimmed = answer.trim();
+        if (trimmed.length === 0) {
+          acceptAndCommit = true;
+          break;
+        }
+        revisionCount++;
+        if (opts?.verbose) {
+          console.log(`\n${D}─── Revision ${revisionCount} — feedback: ${truncate(trimmed, 200)} ───${Z}`);
+        }
+
+        activeSpinner = opts?.verbose ? null : startSpinner(`Refining plan (revision ${revisionCount})…`);
+        const iterSetLabel = (label: string): void => {
+          activeSpinner?.update(label);
+        };
+        const iterOnStep = opts?.verbose
+          ? verboseStepLogger(true, iterSetLabel)
+          : quietStepLogger(iterSetLabel);
+
+        try {
+          commits = await runReplan({
+            model,
+            systemContent,
+            context,
+            currentCommits: commits,
+            feedback: trimmed,
+            onStep: iterOnStep,
+          });
+        } catch (replanErr) {
+          stopActiveSpinner();
+          rl.close();
+          const message = replanErr instanceof Error ? replanErr.message : String(replanErr);
+          console.error(`Error: revision failed: ${message}`);
+          process.exit(1);
+        }
+        stopActiveSpinner();
+        if (commits.length === 0) {
+          rl.close();
+          console.log("No commits generated.");
+          return;
+        }
+        renderCommits(commits);
+      }
+    } finally {
+      rl.close();
+    }
+  } finally {
+    process.off("SIGINT", sigintHandler);
+  }
+
+  stopActiveSpinner();
+
+  if (opts?.verbose) {
+    console.log(`\n${D}─── Committed after ${revisionCount} revision(s) ───${Z}`);
   }
 
   for (const entry of commits) {
@@ -384,6 +500,74 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   }
 
   console.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
+}
+
+interface RunReplanArgs {
+  model: LanguageModel;
+  systemContent: string;
+  context: PrefetchedContext;
+  currentCommits: CommitEntry[];
+  feedback: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onStep: ((step: any) => void) | undefined;
+}
+
+async function runReplan({
+  model,
+  systemContent,
+  context,
+  currentCommits,
+  feedback,
+  onStep,
+}: RunReplanArgs): Promise<CommitEntry[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result: any;
+  try {
+    result = await generateText({
+      model,
+      system: systemContent,
+      prompt: buildRefocusPrompt(context, currentCommits, feedback),
+      tools: {},
+      maxSteps: 1,
+      experimental_output: Output.object({ schema: commitSchema }),
+      onStepFinish: onStep,
+    });
+  } catch (err) {
+    if (NoObjectGeneratedError.isInstance(err) && err.text) {
+      const repaired = repairJSON(err.text);
+      if (repaired) {
+        const parsed = commitSchema.safeParse(JSON.parse(repaired));
+        if (parsed.success) {
+          return parsed.data.commits as CommitEntry[];
+        }
+      }
+      const retryPrompt = [
+        buildRefocusPrompt(context, currentCommits, feedback),
+        "",
+        "---",
+        buildFormatRetryFeedback(err.text),
+      ].join("\n");
+      const retryResult = await generateText({
+        model,
+        system: systemContent,
+        prompt: retryPrompt,
+        tools: {},
+        maxSteps: 1,
+        experimental_output: Output.object({ schema: commitSchema }),
+        onStepFinish: onStep,
+      });
+      if (!retryResult.experimental_output) {
+        throw new Error("model could not produce a valid plan on retry");
+      }
+      return retryResult.experimental_output.commits as CommitEntry[];
+    }
+    throw err;
+  }
+
+  if (!result.experimental_output) {
+    throw new Error("no commit messages generated");
+  }
+  return result.experimental_output.commits as CommitEntry[];
 }
 
 function hasFileIssue(issue: FilesValidationIssue): boolean {
