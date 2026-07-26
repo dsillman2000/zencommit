@@ -62,7 +62,7 @@ const typeColor: Record<string, string> = {
  * Allows callers to update the displayed label, stop the spinner, and
  * check whether the animation is still active.
  */
-interface SpinnerHandle {
+export interface SpinnerHandle {
   /** Updates the label shown next to the spinner. */
   update: (message: string) => void;
   /** Stops the spinner and clears the line. */
@@ -80,7 +80,7 @@ interface SpinnerHandle {
  * @param message - The initial label to display.
  * @returns A {@link SpinnerHandle} for updating or stopping the spinner.
  */
-function startSpinner(message: string): SpinnerHandle {
+export function startSpinner(message: string): SpinnerHandle {
   const chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   let i = 0;
   let current = message;
@@ -106,7 +106,7 @@ function startSpinner(message: string): SpinnerHandle {
 /**
  * A single commit entry in the AI-generated plan.
  */
-interface CommitEntry {
+export interface CommitEntry {
   /** Conventional Commit type (e.g. ``feat``, ``fix``). */
   type: string;
   /** Optional scope (e.g. ``api``, ``cli``). */
@@ -124,7 +124,7 @@ interface CommitEntry {
  * {@link CommitEntry} objects with enumerated types and required file
  * lists.
  */
-const commitSchema = z.object({
+export const commitSchema = z.object({
   commits: z.array(
     z.object({
       type: z.enum([
@@ -142,14 +142,14 @@ const commitSchema = z.object({
   ),
 });
 
-function header(entry: CommitEntry): string {
+export function header(entry: CommitEntry): string {
   const c = typeColor[entry.type] ?? "";
   return entry.scope
     ? `${c}${entry.type}${Z}(${entry.scope}): ${entry.description}`
     : `${c}${entry.type}${Z}: ${entry.description}`;
 }
 
-function message(entry: CommitEntry): string {
+export function message(entry: CommitEntry): string {
   return entry.scope
     ? `${entry.type}(${entry.scope}): ${entry.description}`
     : `${entry.type}: ${entry.description}`;
@@ -166,7 +166,7 @@ function message(entry: CommitEntry): string {
  *   as 1-based).
  * @returns A formatted multi-line string.
  */
-function renderCommit(entry: CommitEntry, index: number): string {
+export function renderCommit(entry: CommitEntry, index: number): string {
   const lines = [
     `\n ${B}${String(index + 1).padStart(2, " ")}.${Z} ${header(entry)}`,
     ` ${D}Files${Z}`,
@@ -195,7 +195,7 @@ function renderCommits(commits: CommitEntry[]): void {
  * @param commits - The commit entries.
  * @returns A JSON string with ``{ commits: [...] }`` shape.
  */
-function commitsAsJson(commits: CommitEntry[]): string {
+export function commitsAsJson(commits: CommitEntry[]): string {
   return JSON.stringify({ commits }, null, 2);
 }
 
@@ -208,7 +208,7 @@ function commitsAsJson(commits: CommitEntry[]): string {
  * @param context - Pre-fetched git context.
  * @returns The complete user-prompt string.
  */
-function buildUserPrompt(context: PrefetchedContext): string {
+export function buildUserPrompt(context: PrefetchedContext): string {
   return [
     "<changed_files>",
     context.formatted.files,
@@ -235,7 +235,7 @@ function buildUserPrompt(context: PrefetchedContext): string {
  * @param feedback - The user's free-text revision feedback.
  * @returns The complete refocus-prompt string.
  */
-function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
+export function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
   return [
     buildUserPrompt(context),
     "",
@@ -256,7 +256,7 @@ function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEn
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyStep = any;
 
-function truncate(s: string, max: number): string {
+export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max) + "…(truncated)";
 }
@@ -274,7 +274,7 @@ function truncate(s: string, max: number): string {
  * @param setLabel - Callback to update the spinner / status label.
  * @returns A step callback, or ``undefined`` if verbose is off.
  */
-function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void): ((step: AnyStep) => void) | undefined {
+export function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void): ((step: AnyStep) => void) | undefined {
   if (!verbose) return undefined;
   let counter = 0;
   return (step: AnyStep) => {
@@ -319,7 +319,7 @@ function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void):
  * @param setLabel - Callback to update the spinner / status label.
  * @returns A step callback.
  */
-function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => void {
+export function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => void {
   return (step: AnyStep) => {
     if (Array.isArray(step.toolCalls) && step.toolCalls.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -734,7 +734,7 @@ async function runReplan({
   return result.experimental_output.commits as CommitEntry[];
 }
 
-function hasFileIssue(issue: FilesValidationIssue): boolean {
+export function hasFileIssue(issue: FilesValidationIssue): boolean {
   return issue.missingInCommits.length > 0 ||
     issue.extraInCommits.length > 0 ||
     issue.duplicateFiles.length > 0;
@@ -749,7 +749,7 @@ function hasFileIssue(issue: FilesValidationIssue): boolean {
  * @param issue - The validation issue from
  *   {@link validateFileCoverage}.
  */
-function logFileIssue(issue: FilesValidationIssue): void {
+export function logFileIssue(issue: FilesValidationIssue): void {
   if (issue.missingInCommits.length > 0) {
     console.error(`  - Missing files: ${issue.missingInCommits.join(", ")}`);
   }
