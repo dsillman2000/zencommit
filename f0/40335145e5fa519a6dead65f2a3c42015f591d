@@ -1,0 +1,21 @@
+src/zencommit.ts
+  s_b997d5bf909030::t_a98223726d2b21 463
+  s_b997d5bf909030::t_b831b895921b3f 557
+  s_b997d5bf909030::t_f2fcffb4adec7a 492
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f040335145e5fa519a6dead65f2a3c42015f591d",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
