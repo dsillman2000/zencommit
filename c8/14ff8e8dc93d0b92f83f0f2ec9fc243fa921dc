@@ -1,0 +1,25 @@
+src/zencommit.test.ts
+  s_f28227205e6d4b::t_7aff16dab2e15c 174
+  s_f28227205e6d4b::t_0acade9f94b63c 144,151
+  s_f28227205e6d4b::t_3833b04a846fc0 170-173,175
+  s_f28227205e6d4b::t_9d9e29e7823044 140-143,145-150,152,176
+README.md
+  s_f28227205e6d4b::t_e896bf303474a2 31-55,61-63,69
+  s_f28227205e6d4b::t_9be549eec5eba9 64,71-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c814ff8e8dc93d0b92f83f0f2ec9fc243fa921dc",
+  "prompts": {},
+  "sessions": {
+    "s_f28227205e6d4b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_063e5cf91ffeywgaj2wT4fWGIF",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
