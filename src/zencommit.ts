@@ -460,6 +460,7 @@ export async function generateInitialPlan(args: GenerateInitialPlanArgs): Promis
       prompt: buildUserPrompt(args.context, args.promptOverride),
       tools,
       maxSteps: 3,
+      maxRetries: 4,
       experimental_output: Output.object({ schema: commitSchema }),
       onStepFinish: args.onStep,
     });
@@ -488,6 +489,7 @@ export async function generateInitialPlan(args: GenerateInitialPlanArgs): Promis
             prompt: retryPrompt,
             tools: {},
             maxSteps: 1,
+            maxRetries: 4,
             experimental_output: Output.object({ schema: commitSchema }),
             onStepFinish: args.onStep,
           });
@@ -552,6 +554,7 @@ export async function fixFileCoverage(args: FixFileCoverageArgs): Promise<Commit
         prompt: retryPrompt,
         tools: {},
         maxSteps: 1,
+        maxRetries: 4,
         experimental_output: Output.object({ schema: commitSchema }),
         onStepFinish: args.onStep,
       });
