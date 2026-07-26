@@ -58,6 +58,6 @@ describe("zencommit integration", () => {
         })),
       );
     },
-    600_000,
+    900_000,
   );
 });

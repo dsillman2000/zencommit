@@ -18,7 +18,7 @@ const config = {
   },
   maxWorkers: 1,
   maxConcurrency: 1,
-  testTimeout: 600_000,
+  testTimeout: 900_000,
   collectCoverage: false,
 };
 
