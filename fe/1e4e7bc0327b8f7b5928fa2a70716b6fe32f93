@@ -1,0 +1,19 @@
+AGENTS.md
+  s_b997d5bf909030::t_4b356ae507abdd 49-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "fe1e4e7bc0327b8f7b5928fa2a70716b6fe32f93",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
