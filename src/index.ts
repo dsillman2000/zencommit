@@ -10,7 +10,7 @@
  */
 import { Command } from "commander";
 import { configCommand } from "./commands/config.js";
-import { run } from "./zencommit.js";
+import { run, runStats } from "./zencommit.js";
 import { listModels } from "./models.js";
 
 const program = new Command();
@@ -22,7 +22,8 @@ program
   .option("-m, --model <model>", "Override the model from config")
   .option("-y, --yes", "Auto-accept commit suggestions without prompting")
   .option("-v, --verbose", "Stream agent thoughts, tool calls, and responses")
-  .option("-p, --prompt <prompt>", "Inject a custom instruction into the user prompt");
+  .option("-p, --prompt <prompt>", "Inject a custom instruction into the user prompt")
+  .option("--stats", undefined);
 
 program.addCommand(configCommand);
 
@@ -40,12 +41,19 @@ program
   });
 
 program.action(async (options) => {
-  await run({
-    modelOverride: options.model as string | undefined,
-    yes: options.yes as boolean,
-    verbose: options.verbose as boolean,
-    promptOverride: options.prompt as string | undefined,
-  });
+  if (options.stats) {
+    await runStats({
+      modelOverride: options.model as string | undefined,
+      promptOverride: options.prompt as string | undefined,
+    });
+  } else {
+    await run({
+      modelOverride: options.model as string | undefined,
+      yes: options.yes as boolean,
+      verbose: options.verbose as boolean,
+      promptOverride: options.prompt as string | undefined,
+    });
+  }
 });
 
 program.parse();

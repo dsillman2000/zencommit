@@ -23,6 +23,7 @@ import {
   allChangedPaths,
   loadAgentsMd,
   type PrefetchedContext,
+  type ChangedFiles,
 } from "./prompt.js";
 import {
   repairJSON,
@@ -155,6 +156,7 @@ export const commitSchema = z.object({
         "test", "chore", "ci", "build", "revert",
       ]).describe("Conventional commit type"),
       scope: z.string()
+        .nullable()
         .optional()
         .describe("Optional scope, lowercase, no spaces (e.g. 'api', 'cli', 'docs')"),
       description: z.string()
@@ -970,5 +972,333 @@ export function logFileIssue(issue: FilesValidationIssue): void {
     for (const dup of issue.duplicateFiles) {
       console.error(`  - Duplicate: ${dup.file} appears in commits ${dup.commitIndices.map((i) => i + 1).join(", ")}`);
     }
+  }
+}
+
+// ─── Stats infrastructure ─────────────────────────────────────────
+
+export interface ToolCallRecord {
+  toolName: string;
+  args: unknown;
+}
+
+export interface ToolResultRecord {
+  toolName: string;
+  result: unknown;
+}
+
+export interface StepRecord {
+  stepIndex: number;
+  stepType?: string;
+  text?: string;
+  reasoning?: string;
+  toolCalls: ToolCallRecord[];
+  toolResults: ToolResultRecord[];
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  finishReason?: string;
+}
+
+export interface CallRecord {
+  phase: string;
+  attemptIndex: number;
+  wallMs: number;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  finishReason?: string;
+  warnings?: unknown[];
+  text?: string;
+  reasoning?: string;
+  steps: StepRecord[];
+  error?: { message: string; code?: string };
+}
+
+export interface StatsReport {
+  schemaVersion: 1;
+  ok: boolean;
+  model: string;
+  generatedAt: string;
+  workdir: string;
+  context: {
+    systemPromptChars: number;
+    userPromptChars: number;
+    changedFiles: ChangedFiles;
+    allChangedPaths: string[];
+    diffSections: { path: string; diff: string; truncated: boolean; omitted?: boolean }[];
+    diffCapHit: boolean;
+  } | null;
+  calls: CallRecord[];
+  metrics: { totalMs: number };
+  result:
+    | {
+        schemaValid: true;
+        coverageValid: true;
+        formatRepairs: number;
+        coverageRetries: number;
+        commits: CommitEntry[];
+      }
+    | {
+        error: { phase: string; message: string; rawOutput?: string };
+      };
+}
+
+/**
+ * Collects per-call stats during a stats-mode run.
+ */
+export class StatsCollector {
+  readonly startTime = Date.now();
+  readonly calls: CallRecord[] = [];
+  private callCount = 0;
+  private currentPhase = "initial";
+
+  setPhase(phase: string): void {
+    this.currentPhase = phase;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  wrap(fn: typeof generateText): any {
+    return async (args: unknown) => {
+      const phase = this.currentPhase;
+      const attemptIndex = this.callCount;
+      this.callCount++;
+
+      const callStart = Date.now();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await (fn as any)(args);
+        const wallMs = Date.now() - callStart;
+
+        const callRecord: CallRecord = {
+          phase,
+          attemptIndex,
+          wallMs,
+          usage: result.usage
+            ? {
+                promptTokens: result.usage.promptTokens as number,
+                completionTokens: result.usage.completionTokens as number,
+                totalTokens: result.usage.totalTokens as number,
+              }
+            : undefined,
+          finishReason: result.finishReason as string | undefined,
+          warnings: result.warnings as unknown[] | undefined,
+          text: result.text as string | undefined,
+          reasoning: result.reasoning as string | undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          steps: ((result.steps ?? []) as any[]).map((step: any, i: number) => ({
+            stepIndex: i,
+            stepType: step.stepType as string | undefined,
+            text: step.text as string | undefined,
+            reasoning: step.reasoning as string | undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            toolCalls: ((step.toolCalls ?? []) as any[]).map((tc: any) => ({
+              toolName: tc.toolName as string,
+              args: tc.args,
+            })),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            toolResults: ((step.toolResults ?? []) as any[]).map((tr: any) => ({
+              toolName: tr.toolName as string,
+              result: tr.result,
+            })),
+            usage: step.usage
+              ? {
+                  promptTokens: (step.usage as { promptTokens: number }).promptTokens,
+                  completionTokens: (step.usage as { completionTokens: number }).completionTokens,
+                  totalTokens: (step.usage as { totalTokens: number }).totalTokens,
+                }
+              : undefined,
+            finishReason: step.finishReason as string | undefined,
+          })),
+        };
+
+        this.calls.push(callRecord);
+        return result;
+      } catch (err) {
+        const wallMs = Date.now() - callStart;
+        const callRecord: CallRecord = {
+          phase,
+          attemptIndex,
+          wallMs,
+          steps: [],
+          error: {
+            message: err instanceof Error ? err.message : String(err),
+          },
+        };
+
+        if (NoObjectGeneratedError.isInstance(err)) {
+          callRecord.text = err.text;
+          callRecord.usage = err.usage
+            ? {
+                promptTokens: err.usage.promptTokens,
+                completionTokens: err.usage.completionTokens,
+                totalTokens: err.usage.totalTokens,
+              }
+            : undefined;
+        }
+
+        this.calls.push(callRecord);
+        throw err;
+      }
+    };
+  }
+}
+
+// ─── runStats ─────────────────────────────────────────────────────
+
+/* istanbul ignore next */
+export async function runStats(opts?: {
+  modelOverride?: string;
+  promptOverride?: string;
+}): Promise<void> {
+  try {
+    const config = await readConfig();
+    const modelName = resolveModel(config, opts?.modelOverride);
+
+    const status = await git.status();
+    if (!hasChanges(status)) {
+      console.log(JSON.stringify({
+        schemaVersion: 1,
+        ok: false,
+        model: modelName,
+        generatedAt: new Date().toISOString(),
+        workdir: cwd,
+        context: null,
+        calls: [],
+        metrics: { totalMs: 0 },
+        result: { error: { phase: "precheck", message: "Nothing to commit. Working tree clean." } },
+      } satisfies StatsReport, null, 2));
+      return;
+    }
+
+    const context = await precomputeContext(status);
+    const knownFiles = allChangedPaths(context.changedFiles);
+    const agentsMd = await loadAgentsMd();
+    const systemContent = buildSystemContent(agentsMd);
+    const userPrompt = buildUserPrompt(context, opts?.promptOverride);
+
+    const provider = createOpenAICompatible({
+      name: "zen",
+      baseURL: "https://opencode.ai/zen/v1",
+      apiKey: config.key,
+    });
+
+    const model: LanguageModel = provider(modelName);
+    const collector = new StatsCollector();
+    const prevFn = __setGenerateText(collector.wrap(generateTextFn));
+
+    let formatRepairs = 0;
+    let coverageRetries = 0;
+
+    try {
+      collector.setPhase("initial");
+      const initialCommits = await generateInitialPlan({
+        model,
+        systemContent,
+        context,
+        promptOverride: opts?.promptOverride,
+        onStep: undefined,
+        onLabel: () => {},
+        logger: { log() {}, error() {} },
+      });
+
+      if (collector.calls.length > 1) {
+        formatRepairs = 1;
+      }
+
+      collector.setPhase("coverage-retry");
+      const finalCommits = await fixFileCoverage({
+        model,
+        systemContent,
+        context,
+        commits: initialCommits,
+        knownFiles,
+        promptOverride: opts?.promptOverride,
+        onStep: undefined,
+        onLabel: () => {},
+        logger: { log() {}, error() {} },
+      });
+
+      if (collector.calls.length > 1 + formatRepairs) {
+        coverageRetries = 1;
+      }
+
+      const elapsed = Date.now() - collector.startTime;
+
+      console.log(JSON.stringify({
+        schemaVersion: 1,
+        ok: true,
+        model: modelName,
+        generatedAt: new Date().toISOString(),
+        workdir: cwd,
+        context: {
+          systemPromptChars: systemContent.length,
+          userPromptChars: userPrompt.length,
+          changedFiles: context.changedFiles,
+          allChangedPaths: knownFiles,
+          diffSections: context.diffSections.map((ds) => ({
+            path: ds.path,
+            diff: ds.diff,
+            truncated: ds.truncated,
+            omitted: ds.omitted,
+          })),
+          diffCapHit: context.diffCapHit,
+        },
+        calls: collector.calls,
+        metrics: { totalMs: elapsed },
+        result: {
+          schemaValid: true,
+          coverageValid: true,
+          formatRepairs,
+          coverageRetries,
+          commits: finalCommits,
+        },
+      } satisfies StatsReport, null, 2));
+    } catch (err) {
+      const elapsed = Date.now() - collector.startTime;
+      const message = err instanceof Error ? err.message : String(err);
+
+      const rawOutput = err instanceof NoObjectGeneratedError
+        ? err.text
+        : undefined;
+
+      console.log(JSON.stringify({
+        schemaVersion: 1,
+        ok: false,
+        model: modelName,
+        generatedAt: new Date().toISOString(),
+        workdir: cwd,
+        context: {
+          systemPromptChars: systemContent.length,
+          userPromptChars: userPrompt.length,
+          changedFiles: context.changedFiles,
+          allChangedPaths: knownFiles,
+          diffSections: context.diffSections.map((ds) => ({
+            path: ds.path,
+            diff: ds.diff,
+            truncated: ds.truncated,
+            omitted: ds.omitted,
+          })),
+          diffCapHit: context.diffCapHit,
+        },
+        calls: collector.calls,
+        metrics: { totalMs: elapsed },
+        result: {
+          error: { phase: "model-failure", message, rawOutput },
+        },
+      } satisfies StatsReport, null, 2));
+    } finally {
+      __setGenerateText(prevFn);
+    }
+  } catch (err) {
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      ok: false,
+      model: "unknown",
+      generatedAt: new Date().toISOString(),
+      workdir: cwd,
+      context: null,
+      calls: [],
+      metrics: { totalMs: 0 },
+      result: {
+        error: { phase: "fatal", message: err instanceof Error ? err.message : String(err) },
+      },
+    } satisfies StatsReport, null, 2));
   }
 }
