@@ -1,0 +1,23 @@
+jest.integration.config.js
+  s_73d40ea7425baf::t_07e9f2686d323c 21
+tests/integration/robustness.integration.test.ts
+  s_73d40ea7425baf::t_1afc57b55f7bca 61
+tests/integration.config.json
+  s_73d40ea7425baf::t_6d8ef7bfb3913a 8,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "7e8a30f769ac8c305bbd2584522908898a876710",
+  "prompts": {},
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
