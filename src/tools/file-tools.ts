@@ -21,9 +21,8 @@ const READ_FILE_CAP = 50 * 1024;
  * working directory.  Absolute paths and directory traversal attempts
  * are rejected.  Output is truncated at {@link READ_FILE_CAP} bytes.
  *
- * @throws {Error} If the path is absolute.
- * @throws {Error} If the path resolves outside the working directory.
- * @throws {Error} If the file cannot be read (missing, permissions, etc.).
+ * Returns an error message string (rather than throwing) on failure
+ * so the model can recover gracefully and continue producing output.
  */
 export const readFile = tool({
   description:
@@ -33,14 +32,14 @@ export const readFile = tool({
   }),
   execute: async ({ path }) => {
     if (path.startsWith("/")) {
-      throw new Error("Absolute paths are not allowed. Use a relative path.");
+      return `Error: Absolute paths are not allowed. Use a relative path.`;
     }
 
     const resolved = resolve(join(cwd, path));
     const rel = relative(cwd, resolved);
 
     if (rel.startsWith("..") || rel === "") {
-      throw new Error(`Path "${path}" is outside the working directory.`);
+      return `Error: Path "${path}" is outside the working directory.`;
     }
 
     let raw: string;
@@ -48,7 +47,7 @@ export const readFile = tool({
       raw = await fsReadFile(resolved, "utf-8");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to read file "${path}": ${message}`, { cause: err });
+      return `Error: Failed to read file "${path}": ${message}`;
     }
 
     if (raw.length <= READ_FILE_CAP) return raw;

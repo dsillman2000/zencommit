@@ -2,24 +2,24 @@ import { describe, it, expect } from "@jest/globals";
 import { readFile } from "./file-tools.js";
 
 describe("readFile tool", () => {
-  it("rejects absolute paths", async () => {
-    await expect(readFile.execute({ path: "/etc/passwd" }))
-      .rejects.toThrow("Absolute paths are not allowed");
+  it("returns error string for absolute paths", async () => {
+    const result = await readFile.execute({ path: "/etc/passwd" });
+    expect(result).toContain("Absolute paths are not allowed");
   });
 
-  it("rejects path traversal outside the working directory", async () => {
-    await expect(readFile.execute({ path: "../../etc/passwd" }))
-      .rejects.toThrow("outside the working directory");
+  it("returns error string for path traversal outside the working directory", async () => {
+    const result = await readFile.execute({ path: "../../etc/passwd" });
+    expect(result).toContain("outside the working directory");
   });
 
-  it("rejects a dot path that resolves to the working directory itself", async () => {
-    await expect(readFile.execute({ path: "." }))
-      .rejects.toThrow("outside the working directory");
+  it("returns error string for a dot path that resolves to the working directory itself", async () => {
+    const result = await readFile.execute({ path: "." });
+    expect(result).toContain("outside the working directory");
   });
 
-  it("throws when the file does not exist", async () => {
-    await expect(readFile.execute({ path: "./nonexistent-xyz123.test" }))
-      .rejects.toThrow("Failed to read file");
+  it("returns error string when the file does not exist", async () => {
+    const result = await readFile.execute({ path: "./nonexistent-xyz123.test" });
+    expect(result).toContain("Failed to read file");
   });
 
   it("reads an existing repo file", async () => {
