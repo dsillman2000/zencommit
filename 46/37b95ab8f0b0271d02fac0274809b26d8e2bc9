@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_f28227205e6d4b::t_f2f1d9141e66d9 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4637b95ab8f0b0271d02fac0274809b26d8e2bc9",
+  "prompts": {},
+  "sessions": {
+    "s_f28227205e6d4b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_063e5cf91ffeywgaj2wT4fWGIF",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
