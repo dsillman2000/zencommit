@@ -30,7 +30,6 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
-    "@observablehq/plot": "^0.6.17",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.29",
     "eslint": "^10.8.0",
