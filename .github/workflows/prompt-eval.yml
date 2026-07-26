@@ -25,10 +25,11 @@ jobs:
           node-version: "lts/*"
           cache: npm
 
-      - uses: iterative/setup-cml@v1
-
       - name: Install dependencies
         run: npm ci
+
+      - name: Install CML
+        run: npm install -g @dvcorg/cml
 
       - name: Build
         run: npm run build
