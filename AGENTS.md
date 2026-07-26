@@ -12,9 +12,10 @@ npm run lint        # ESLint with typescript-eslint recommended rules
 npm run typecheck   # tsc --noEmit
 npm run build       # tsc → outputs to dist/
 npm run dev         # tsx src/index.ts (no build step)
+npm test            # unit tests (Jest, offline, fast)
+npm run test:coverage  # unit tests with coverage
+npm run test:integration  # integration/benchmark suite (requires API key, network, ~3-10 min)
 ```
-
-No test framework is configured.
 
 ## CI pipeline
 
@@ -22,7 +23,8 @@ No test framework is configured.
 1. `npm ci`
 2. `npm run lint`
 3. `npm run typecheck`
-4. `npm audit --audit-level=high`
+4. `npm run test`
+5. `npm audit --audit-level=high --omit=dev`
 
 ## Architecture
 
@@ -41,3 +43,6 @@ No test framework is configured.
 - **ESLint**: Flat config at `eslint.config.js` using `tseslint.configs.recommended`. Ignores `dist/`.
 - **`npm audit` in CI**: Set to `--audit-level=high --omit=dev` — devDependencies (jest deps) are excluded from the audit. Pre-existing low/moderate vulns in `ai` SDK transitive deps don't fail the build.
 - **Pre-existing CVE-2026-8769**: `@ai-sdk/provider-utils <=3.0.97` has an Uncontrolled Resource Consumption issue (CVSS 4.3 MEDIUM / GHSA low). Fix requires `@ai-sdk/provider-utils >=4.0.33`. Awaiting `ai` SDK major bump — not actionable without breaking upstream changes.
+- **`--stats` hidden CLI flag**: The `--stats` flag runs zencommit in a non-interactive, non-committing mode that emits a full JSON performance report to stdout. Used by the integration test suite. Not shown in `--help`. The `"types"` field in the schema nullable for `scope` — many models output `"scope": null` instead of omitting it.
+- **Integration test suite**: Lives in `tests/integration/`. Requires `RUN_INTEGRATION_TESTS=1` environment variable. Orchestration config at `tests/integration.config.json` controls model list, trial count, project type, and scenario. Fixtures are at `tests/fixtures/<project-type>/`. Build fixtures via `node tests/scripts/build-fixture.mjs <scenario>`.
+- **Two Jest configs**: `jest.config.js` (fast unit tests, excludes `*.integration.test.ts`) and `jest.integration.config.js` (network-dependent, long timeout, runs from `tsconfig.test.json`). Integration tests spawn `dist/index.js --stats` per trial.

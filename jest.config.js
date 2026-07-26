@@ -6,7 +6,8 @@ const config = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   testEnvironment: "node",
-  testMatch: ["**/*.test.ts"],
+   testMatch: ["**/*.test.ts"],
+   testPathIgnorePatterns: ["/node_modules/", "\\.integration\\.test\\.ts$"],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
