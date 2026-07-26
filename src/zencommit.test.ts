@@ -137,6 +137,19 @@ describe("buildUserPrompt", () => {
     expect(prompt).toContain(ctx.formatted.files);
     expect(prompt).toContain(ctx.formatted.diffs);
   });
+
+  it("prepends custom prompt when provided", () => {
+    const ctx = mockContext();
+    const prompt = buildUserPrompt(ctx, "Focus on breaking changes only.");
+    expect(prompt.startsWith("Focus on breaking changes only.")).toBe(true);
+    expect(prompt).toContain("<changed_files>");
+  });
+
+  it("does not add extra blank lines when custom prompt is empty", () => {
+    const ctx = mockContext();
+    const prompt = buildUserPrompt(ctx, "");
+    expect(prompt.startsWith("<changed_files>")).toBe(true);
+  });
 });
 
 describe("buildRefocusPrompt", () => {
@@ -153,6 +166,13 @@ describe("buildRefocusPrompt", () => {
     expect(prompt).toContain("<feedback>");
     expect(prompt).toContain("merge these");
     expect(prompt).toContain("</feedback>");
+  });
+
+  it("prepends custom prompt when provided", () => {
+    const ctx = mockContext();
+    const prompt = buildRefocusPrompt(ctx, [mockCommit], "merge these", "Use angular convention.");
+    expect(prompt.startsWith("Use angular convention.")).toBe(true);
+    expect(prompt).toContain("<feedback>");
   });
 });
 

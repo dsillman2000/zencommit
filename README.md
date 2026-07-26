@@ -28,24 +28,48 @@ Run `zencommit` in a git repository with changes:
 zencommit
 ```
 
-It will:
-1. Analyze your changes using the configured AI model
-2. Propose conventional commit message(s) grouping related files
-3. Prompt you to accept (press Enter) or provide feedback to revise
-4. Stage and commit once accepted
+### Workflow
+
+1. **Analysis** — zencommit inspects your working tree (staged, unstaged, and untracked files) and sends diffs to the AI model
+2. **Review** — a suggested commit plan is displayed with types, scopes, descriptions, and assigned files
+3. **Steer with feedback** — instead of accepting, type free-form feedback to revise:
+
+   ```
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    1. feat(api): add user endpoint
+       Files
+         • src/api.ts
+         • src/api.test.ts
+
+    2. fix(auth): correct token expiry check
+       Files
+         • src/auth.ts
+
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Enter to commit · Ctrl+C to abort · feedback: split auth change into its own commit
+   ```
+
+4. **Iterate** — the model revises the plan based on your feedback. Repeat as many times as needed
+5. **Commit** — press Enter (empty feedback) to stage and commit
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `--model, -m <model>` | Override the model from config |
-| `--yes, -y` | Auto-accept the first suggestion without prompting |
-| `--verbose, -v` | Stream agent thoughts, tool calls, and responses |
+| `-m, --model <model>` | Override the model from config |
+| `-y, --yes` | Skip the review prompt and commit the first suggestion immediately |
+| `-v, --verbose` | Stream agent thoughts, tool calls, and responses to stdout |
+| `-p, --prompt <prompt>` | Inject a custom instruction into the user prompt, before the diff context |
 
 ```bash
 zencommit -m "claude-sonnet-4-20250514"
 zencommit -y
+zencommit -y -m "gpt-4o"
 zencommit -v
+zencommit -p "Use emoji prefixes in commit messages"
+zencommit -p "Group all test file changes into a single separate commit"
 ```
 
 ### `zencommit config`
