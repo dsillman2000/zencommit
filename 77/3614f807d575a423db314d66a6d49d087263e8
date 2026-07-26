@@ -1,0 +1,14 @@
+tests/integration.config.json
+  h_4cc74772b10fd4 7-8,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "773614f807d575a423db314d66a6d49d087263e8",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
