@@ -1,0 +1,26 @@
+src/prompt.ts
+  s_170f7049b99d07::t_dcb727931fb657 110
+  s_170f7049b99d07::t_b36eac456e5aee 22-29
+src/prompt.test.ts
+  s_170f7049b99d07::t_f281e595158c76 304-305,307-308,311,314-316
+  s_170f7049b99d07::t_56b0d675d991a1 218-303,306,309-310,312-313,317-357
+  s_170f7049b99d07::t_97bd525bffc2b7 7-9
+  s_170f7049b99d07::t_441cf6c47b19f9 32-46
+  s_170f7049b99d07::t_b543bba0b14e4c 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "3306402877a8abcdcbd9d1cba9a7af253da4b614",
+  "prompts": {},
+  "sessions": {
+    "s_170f7049b99d07": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_061bf2c38ffeB19C0aklc6KJNA",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
