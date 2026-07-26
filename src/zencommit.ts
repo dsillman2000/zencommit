@@ -1,12 +1,24 @@
-import { generateText, Output, NoObjectGeneratedError } from "ai";
+import { generateText, Output, NoObjectGeneratedError, type LanguageModel } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import { createInterface } from "node:readline/promises";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { simpleGit } from "simple-git";
 import { readConfig } from "./config.js";
 import { tools } from "./tools/index.js";
+import {
+  SYSTEM_PROMPT,
+  precomputeContext,
+  allChangedPaths,
+  loadAgentsMd,
+  type PrefetchedContext,
+} from "./prompt.js";
+import {
+  repairJSON,
+  validateFileCoverage,
+  buildFormatRetryFeedback,
+  buildFilesRetryFeedback,
+  type FilesValidationIssue,
+} from "./repair.js";
 
 const cwd = process.cwd();
 const git = simpleGit(cwd);
@@ -22,14 +34,23 @@ const typeColor: Record<string, string> = {
   build: "\x1b[2m",    revert: "\x1b[31m",
 };
 
-function startSpinner(message: string) {
+interface SpinnerHandle {
+  update: (message: string) => void;
+  stop: () => void;
+}
+
+function startSpinner(message: string): SpinnerHandle {
   const chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   let i = 0;
+  let current = message;
   const interval = setInterval(() => {
-    process.stdout.write(`\r\x1b[K${chars[i % chars.length]} ${message}`);
+    process.stdout.write(`\r\x1b[K${chars[i % chars.length]} ${current}`);
     i++;
   }, 80);
   return {
+    update: (msg) => {
+      current = msg;
+    },
     stop: () => {
       clearInterval(interval);
       process.stdout.write("\r\x1b[K");
@@ -50,48 +71,17 @@ const commitSchema = z.object({
       type: z.enum([
         "feat", "fix", "docs", "style", "refactor", "perf",
         "test", "chore", "ci", "build", "revert",
-      ]),
-      scope: z.string().optional(),
-      description: z.string(),
-      files: z.array(z.string()).min(1),
+      ]).describe("Conventional commit type"),
+      scope: z.string()
+        .optional()
+        .describe("Optional scope, lowercase, no spaces (e.g. 'api', 'cli', 'docs')"),
+      description: z.string()
+        .describe("Short imperative-mood lowercase summary of the change"),
+      files: z.array(z.string()).min(1)
+        .describe("Exact relative file paths included in this commit"),
     })
   ),
 });
-
-const SYSTEM_PROMPT = `You are an expert at writing conventional commit messages for git repositories.
-
-**Workflow**
-1. Use the gitStatus tool to see all changed files.
-2. Use the gitDiff tool to understand the specific changes in each file.
-3. Use the gitLog tool to see recent commit conventions.
-4. Use the readFile tool if you need more context about file contents.
-5. Produce a list of commits where each changed file is assigned to exactly one commit.
-
-**Commit Rules**
-- Each commit must follow the Conventional Commits format: type(scope): description
-- Valid types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert
-- Scope is optional but encouraged when clearly applicable
-- Description must be in imperative mood, lowercase, and concise
-- Each commit MUST list the exact file paths in the 'files' array
-- EVERY changed file must appear in exactly ONE commit
-- Group logically related file changes into a single commit
-- Split clearly independent changes into separate commits only when warranted
-- There can be at most as many commits as there are changed files
-- If the AGENTS.md section below specifies conventions, follow them
-
-**Critical Output Format**
-- Your final response MUST be raw, valid JSON and nothing else.
-- Do NOT wrap the JSON in markdown code fences (no \`\`\`json or \`\`\`).
-- The response must start with { and end with } — pure JSON, no prefix, no suffix.`;
-
-async function loadAgentsMd(): Promise<string> {
-  try {
-    const content = await readFile(join(cwd, "AGENTS.md"), "utf-8");
-    return `\n\n**AGENTS.md (project conventions):**\n${content}`;
-  } catch {
-    return "";
-  }
-}
 
 function header(entry: CommitEntry): string {
   const c = typeColor[entry.type] ?? "";
@@ -115,36 +105,76 @@ function renderCommit(entry: CommitEntry, index: number): string {
   return lines.join("\n");
 }
 
-function validateCommits(commits: CommitEntry[]): string[] {
-  const errors: string[] = [];
-  const seenFiles = new Map<string, number>();
-
-  for (let i = 0; i < commits.length; i++) {
-    for (const file of commits[i].files) {
-      if (seenFiles.has(file)) {
-        errors.push(
-          `File "${file}" appears in both commit ${seenFiles.get(file)! + 1} and commit ${i + 1}`
-        );
-      }
-      seenFiles.set(file, i);
-    }
-  }
-
-  return errors;
+function buildUserPrompt(context: PrefetchedContext): string {
+  return [
+    "<changed_files>",
+    context.formatted.files,
+    "</changed_files>",
+    "",
+    "<diffs>",
+    context.formatted.diffs,
+    "</diffs>",
+    "",
+    "Analyze the above and produce conventional commit messages for all changes.",
+    "Respond with raw JSON only — no markdown fences, no commentary.",
+  ].join("\n");
 }
 
-function stripMarkdownJsonFences(text: string): string {
-  let stripped = text.trim();
-  if (stripped.startsWith("```")) {
-    const firstNewline = stripped.indexOf("\n");
-    if (firstNewline !== -1) {
-      stripped = stripped.slice(firstNewline + 1);
-      if (stripped.endsWith("```")) {
-        stripped = stripped.slice(0, -3).trimEnd();
-      }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyStep = any;
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + "…(truncated)";
+}
+
+function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void): ((step: AnyStep) => void) | undefined {
+  if (!verbose) return undefined;
+  let counter = 0;
+  return (step: AnyStep) => {
+    counter++;
+    console.log(`\n${D}─── Step ${counter} (${step.stepType ?? "unknown"}) ───${Z}`);
+    setLabel(`Step ${counter}`);
+
+    const text = typeof step.text === "string" ? step.text : "";
+    const reasoning = typeof step.reasoning === "string" ? step.reasoning : "";
+    const toolCalls = Array.isArray(step.toolCalls) ? step.toolCalls : [];
+    const toolResults = Array.isArray(step.toolResults) ? step.toolResults : [];
+
+    console.log(`${D}│ text:${Z} ${text.length === 0 ? "(empty)" : `${text.length} chars`}`);
+    if (text.trim().length > 0) {
+      console.log(`${D}│${Z} ${truncate(text.trim(), 800)}`);
     }
-  }
-  return stripped;
+    console.log(`${D}│ reasoning:${Z} ${reasoning.length === 0 ? "(none)" : `${reasoning.length} chars`}`);
+    if (reasoning.trim().length > 0) {
+      console.log(`${D}│${Z} ${truncate(reasoning.trim(), 800)}`);
+    }
+    console.log(`${D}│ tool calls:${Z} ${toolCalls.length}`);
+    for (const tc of toolCalls) {
+      const argsStr = JSON.stringify(tc.args ?? {});
+      console.log(`${D}│   •${Z} ${tc.toolName ?? "?"}(${truncate(argsStr, 300)})`);
+    }
+    console.log(`${D}│ tool results:${Z} ${toolResults.length}`);
+    for (const tr of toolResults) {
+      const raw = tr.result;
+      const resultStr = typeof raw === "string" ? raw : JSON.stringify(raw ?? null);
+      console.log(`${D}│   •${Z} ${tr.toolName ?? "?"}: ${truncate(resultStr, 200)}`);
+    }
+    console.log(`${D}│ finishReason:${Z} ${step.finishReason ?? "?"}  ${D}│ usage:${Z} ${step.usage?.totalTokens ?? "?"} tokens`);
+  };
+}
+
+function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => void {
+  return (step: AnyStep) => {
+    if (Array.isArray(step.toolCalls) && step.toolCalls.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const tc of step.toolCalls as any[]) {
+        setLabel(`Calling ${tc.toolName}…`);
+      }
+    } else {
+      setLabel("Refining commit plan…");
+    }
+  };
 }
 
 export async function run(opts?: { modelOverride?: string; yes?: boolean; verbose?: boolean }): Promise<void> {
@@ -175,19 +205,18 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   }
 
   const status = await git.status();
-  const allChanged = [
-    ...status.staged,
-    ...status.modified,
-    ...status.deleted,
-    ...status.created,
-    ...status.not_added,
-    ...status.renamed.map((r) => r.to),
-  ];
-
-  if (allChanged.length === 0) {
+  if (status.staged.length === 0 &&
+      status.modified.length === 0 &&
+      status.deleted.length === 0 &&
+      status.created.length === 0 &&
+      status.not_added.length === 0 &&
+      status.renamed.length === 0) {
     console.log("Nothing to commit. Working tree clean.");
     return;
   }
+
+  const context = await precomputeContext(status);
+  const knownFiles = allChangedPaths(context.changedFiles);
 
   const agentsMdContent = await loadAgentsMd();
 
@@ -197,98 +226,70 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
     apiKey: config.key,
   });
 
-  const model = provider(modelName);
-  const spinner = opts?.verbose ? null : startSpinner("Analyzing changes...");
-
-  let stepNumber = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onStepFinish: ((step: any) => void) | undefined =
-    opts?.verbose
-      ? (step) => {
-          stepNumber++;
-          console.log(`\n${D}Step ${stepNumber} (${step.stepType})${Z}`);
-
-          if (step.text.trim()) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const text: string = step.text;
-            console.log(`${D}│ text:${Z} ${text.trim().split("\n").join(`\n${D}│      ${Z}`)}`);
-          }
-
-          if (step.reasoning?.trim()) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const reasoning: string = step.reasoning;
-            console.log(`${D}│ reasoning:${Z} ${reasoning.trim().split("\n").join(`\n${D}│            ${Z}`)}`);
-          }
-
-          if (step.toolCalls.length > 0) {
-            console.log(`${D}│ tool calls:${Z}`);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            for (const tc of step.toolCalls as any[]) {
-              const argsStr = JSON.stringify(tc.args);
-              const truncated = argsStr.length > 300 ? argsStr.slice(0, 300) + "…" : argsStr;
-              console.log(`${D}│   •${Z} ${tc.toolName}(${truncated})`);
-            }
-          }
-
-          if (step.toolResults.length > 0) {
-            console.log(`${D}│ tool results:${Z}`);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            for (const tr of step.toolResults as any[]) {
-              const raw = tr.result;
-              const resultStr = typeof raw === "string" ? raw : JSON.stringify(raw);
-              const truncated = resultStr.length > 120 ? resultStr.slice(0, 120) + `…${D} (truncated)${Z}` : resultStr;
-              console.log(`${D}│   •${Z} ${tr.toolName}: ${truncated.split("\n").join(`\n${D}│     ${Z}`)}`);
-            }
-          }
-        }
-      : undefined;
+  const model: LanguageModel = provider(modelName);
+  const spinner = opts?.verbose ? null : startSpinner("Analyzing changes…");
 
   if (opts?.verbose) {
     console.log(`${D}─── Verbose agent logs ───${Z}`);
   }
 
+  const setLabel = (label: string): void => {
+    spinner?.update(label);
+  };
+  const onStepVerbose = verboseStepLogger(Boolean(opts?.verbose), setLabel);
+  const onStepQuiet = opts?.verbose ? undefined : quietStepLogger(setLabel);
+  const onStep = opts?.verbose ? onStepVerbose : onStepQuiet;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let result: any;
-  let recovered = false;
+
   try {
     result = await generateText({
       model,
       system: SYSTEM_PROMPT + agentsMdContent,
-      prompt: "Analyze the current git working tree and produce conventional commit messages for all changes. Respond with raw JSON only, no markdown fences.",
+      prompt: buildUserPrompt(context),
       tools,
-      maxSteps: 6,
+      maxSteps: 3,
       experimental_output: Output.object({ schema: commitSchema }),
-      onStepFinish,
+      onStepFinish: onStep,
     });
   } catch (err) {
-    spinner?.stop();
     if (NoObjectGeneratedError.isInstance(err) && err.text) {
-      try {
-        const stripped = stripMarkdownJsonFences(err.text);
-        const parsed = commitSchema.safeParse(JSON.parse(stripped));
+      spinner?.update("Repairing malformed output…");
+      const repaired = repairJSON(err.text);
+      if (repaired) {
+        const parsed = commitSchema.safeParse(JSON.parse(repaired));
         if (parsed.success) {
           result = { experimental_output: parsed.data, usage: err.usage, steps: [] };
-          recovered = true;
-        } else {
-          if (opts?.verbose) {
-            console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
-          }
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`Error: ${message}`);
+        }
+      }
+      if (!result?.experimental_output) {
+        spinner?.update("Retrying with focused feedback…");
+        const retryPrompt = [
+          buildUserPrompt(context),
+          "",
+          "---",
+          buildFormatRetryFeedback(err.text),
+        ].join("\n");
+        try {
+          result = await generateText({
+            model,
+            system: SYSTEM_PROMPT + agentsMdContent,
+            prompt: retryPrompt,
+            tools: {},
+            maxSteps: 1,
+            experimental_output: Output.object({ schema: commitSchema }),
+            onStepFinish: onStep,
+          });
+        } catch (retryErr) {
+          spinner?.stop();
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          console.error(`Error: failed to parse model output after retry: ${retryMsg}`);
           process.exit(1);
         }
-      } catch {
-        if (opts?.verbose) {
-          console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error: ${message}`);
-        process.exit(1);
       }
     } else {
-      if (opts?.verbose) {
-        console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps) ───${Z}\n`);
-      }
+      spinner?.stop();
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Error: ${message}`);
       process.exit(1);
@@ -297,38 +298,69 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
 
   spinner?.stop();
 
-  if (opts?.verbose) {
-    if (recovered) {
-      console.log(`\n${D}─── End verbose agent logs (${stepNumber} steps, ${result.usage?.totalTokens ?? "?"} tokens, recovered from markdown fences) ───${Z}\n`);
-    } else {
-      console.log(`\n${D}─── End verbose agent logs (${result.steps.length} steps, ${result.usage.totalTokens} tokens) ───${Z}\n`);
-    }
-  }
-
   if (!result.experimental_output) {
     console.error("Error: No commit messages generated.");
     process.exit(1);
   }
 
-  const { commits } = result.experimental_output as { commits: CommitEntry[] };
+  let commits = result.experimental_output.commits as CommitEntry[];
+
+  const filesIssue = validateFileCoverage(
+    commits.map((c) => c.files),
+    knownFiles,
+  );
+
+  if (hasFileIssue(filesIssue)) {
+    spinner?.update("Correcting file coverage…");
+    const retryPrompt = [
+      buildUserPrompt(context),
+      "",
+      "---",
+      buildFilesRetryFeedback(filesIssue),
+    ].join("\n");
+    try {
+      const retryResult = await generateText({
+        model,
+        system: SYSTEM_PROMPT + agentsMdContent,
+        prompt: retryPrompt,
+        tools: {},
+        maxSteps: 1,
+        experimental_output: Output.object({ schema: commitSchema }),
+        onStepFinish: onStep,
+      });
+      if (retryResult.experimental_output) {
+        const retryCommits = retryResult.experimental_output.commits as CommitEntry[];
+        const retryIssue = validateFileCoverage(
+          retryCommits.map((c) => c.files),
+          knownFiles,
+        );
+        if (!hasFileIssue(retryIssue)) {
+          commits = retryCommits;
+        } else {
+          spinner?.stop();
+          console.error("Error: model could not produce a valid file-coverage set on retry.");
+          logFileIssue(retryIssue);
+          process.exit(1);
+        }
+      }
+    } catch (err) {
+      spinner?.stop();
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Error: file-coverage retry failed: ${message}`);
+      process.exit(1);
+    }
+  }
+
+  spinner?.stop();
+
+  if (opts?.verbose) {
+    const totalSteps = result.steps?.length ?? 0;
+    console.log(`\n${D}─── End verbose agent logs (${totalSteps} steps, ${result.usage?.totalTokens ?? "?"} tokens) ───${Z}\n`);
+  }
 
   if (commits.length === 0) {
     console.log("No commits generated.");
     return;
-  }
-
-  const errors = validateCommits(commits);
-  if (errors.length > 0) {
-    console.error("Error: Invalid commit structure returned by AI:");
-    for (const err of errors) {
-      console.error(`  - ${err}`);
-    }
-    console.error("\nGenerated commits were:");
-    for (let i = 0; i < commits.length; i++) {
-      console.error(renderCommit(commits[i], i));
-    }
-    console.error();
-    process.exit(1);
   }
 
   console.log("━".repeat(48));
@@ -352,4 +384,24 @@ async function runInternal(opts?: { modelOverride?: string; yes?: boolean; verbo
   }
 
   console.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
+}
+
+function hasFileIssue(issue: FilesValidationIssue): boolean {
+  return issue.missingInCommits.length > 0 ||
+    issue.extraInCommits.length > 0 ||
+    issue.duplicateFiles.length > 0;
+}
+
+function logFileIssue(issue: FilesValidationIssue): void {
+  if (issue.missingInCommits.length > 0) {
+    console.error(`  - Missing files: ${issue.missingInCommits.join(", ")}`);
+  }
+  if (issue.extraInCommits.length > 0) {
+    console.error(`  - Extra (unchanged) files: ${issue.extraInCommits.join(", ")}`);
+  }
+  if (issue.duplicateFiles.length > 0) {
+    for (const dup of issue.duplicateFiles) {
+      console.error(`  - Duplicate: ${dup.file} appears in commits ${dup.commitIndices.map((i) => i + 1).join(", ")}`);
+    }
+  }
 }
