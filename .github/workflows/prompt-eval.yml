@@ -1,0 +1,63 @@
+name: Prompt Evaluation
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip:eval') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - uses: iterative/setup-cml@v1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Download baseline metrics
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: prompt-eval.yml
+          branch: main
+          name: evaluation-metrics
+          path: baseline/
+          if_no_artifact_found: warn
+
+      - name: Run integration tests
+        env:
+          OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+        run: npm run test:integration
+
+      - name: Generate evaluation report
+        run: npx tsx scripts/evaluate.ts
+
+      - name: Post CML comment
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cml comment create report.md
+
+      - name: Upload evaluation metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-metrics
+          path: metrics.json
