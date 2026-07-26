@@ -114,3 +114,7 @@ Model data is fetched from [models.dev](https://models.dev/providers/opencode/) 
 ## Project conventions
 
 Place an `AGENTS.md` file in your repository root to provide your own project-specific commit conventions. zencommit appends it to the system prompt when generating messages.
+
+---
+
+*Made with ❤️ in Boston.*
