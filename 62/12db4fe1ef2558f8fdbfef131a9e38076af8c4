@@ -1,0 +1,73 @@
+tests/integration/orchestrator.ts
+  s_b997d5bf909030::t_00cb86e9e2f9a1 3-60,62-64,70-185,188-189,192-194,204-206,210-214,218-225,228-235,240-272,280-284,292-296
+  s_b997d5bf909030::t_27f5277fbb2d5d 1-2,61,65-69,186-187,190-191,195-203,207-209,215-217,226-227,236-239,273-279,285-291
+tests/fixtures/node-project/base/.gitignore
+  s_b997d5bf909030::t_b41319a9a8b9c6 1-2
+tests/fixtures/node-project/base/src/old-util.ts
+  s_b997d5bf909030::t_dfacd298c422fa 1-4
+tests/fixtures/node-project/scenarios/default/staged.txt
+  s_b997d5bf909030::t_0d4cab78ad601e 1
+tests/integration/fixtures.ts
+  s_b997d5bf909030::t_465adbcfa7c089 1-60
+tests/scripts/build-fixture.mjs
+  s_b997d5bf909030::t_fa09cb842cee4c 10
+  s_b997d5bf909030::t_e25a8015486107 1-9,11-134
+tests/integration.config.json
+  s_b997d5bf909030::t_8d3de5ba22c885 9
+  s_b997d5bf909030::t_9bfdfd4827a60c 1-8,10-11
+tests/fixtures/node-project/base/src/config.ts
+  s_b997d5bf909030::t_94db96a82b067b 1-13
+tests/fixtures/node-project/base/README.md
+  s_b997d5bf909030::t_b5d928e6b2b713 1-3
+tests/fixtures/node-project/base/package.json
+  s_b997d5bf909030::t_83a2d4fee70fa0 1-6
+tests/fixtures/node-project/base/src/auth.ts
+  s_b997d5bf909030::t_59fc7052a1d96b 1-21
+tests/fixtures/node-project/base/src/api.ts
+  s_b997d5bf909030::t_ad7e2c41945d9b 1-16
+tsconfig.test.json
+  s_b997d5bf909030::t_4030799e5e943f 1-3,6-8
+  s_b997d5bf909030::t_aa79e168f7cabe 4-5
+tests/fixtures/node-project/scenarios/default/src/feature-flags.ts
+  s_b997d5bf909030::t_2076dfcb6d781d 1-18
+tests/integration/stats-schema.ts
+  s_b997d5bf909030::t_68ebbde1e72320 1-91,93-106,108-110
+  s_b997d5bf909030::t_6e5a1716d237c5 92,107
+tests/fixtures/node-project/scenarios/default/src/config.ts
+  s_b997d5bf909030::t_390c848aa0e150 1-15
+tests/fixtures/node-project/base/src/index.ts
+  s_b997d5bf909030::t_53cd246a53a040 1-9
+tests/fixtures/node-project/scenarios/default/deleted.txt
+  s_b997d5bf909030::t_6fbb8b80d4f079 1
+tests/fixtures/node-project/base/AGENTS.md
+  s_b997d5bf909030::t_058c545bb26697 1-6
+tests/integration/robustness.integration.test.ts
+  s_b997d5bf909030::t_79753dfee0718a 30
+  s_b997d5bf909030::t_6ad152993c2feb 6-7,9-10
+  s_b997d5bf909030::t_2280c428d3b0f2 1-5,11,16,21,41
+  s_b997d5bf909030::t_ed60e57debf0ff 8,12-15,17-20,22-29,31-40,42-58
+tests/integration/.gitignore
+  s_b997d5bf909030::t_549db20896e603 1
+jest.integration.config.js
+  s_b997d5bf909030::t_a62582f1ab5a40 1-25
+tests/fixtures/node-project/base/src/util.ts
+  s_b997d5bf909030::t_b51f36b94db2e8 1-7
+tests/fixtures/node-project/scenarios/default/src/auth.ts
+  s_b997d5bf909030::t_0afe8bd2ac5ed6 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6212db4fe1ef2558f8fdbfef131a9e38076af8c4",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
