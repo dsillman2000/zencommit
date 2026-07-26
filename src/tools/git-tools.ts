@@ -5,88 +5,38 @@ import { simpleGit } from "simple-git";
 const cwd = process.cwd();
 const git = simpleGit(cwd);
 
-export const gitStatus = tool({
-  description: "Get the current git status showing staged, unstaged, and untracked changes",
-  parameters: z.object({}),
-  execute: async () => {
-    const status = await git.status();
-
-    const lines: string[] = [];
-    lines.push(`On branch ${status.current}`);
-    if (status.tracking) {
-      lines.push(`Tracking ${status.tracking}`);
-    }
-
-    if (status.staged.length > 0) {
-      lines.push("\nStaged:");
-      for (const file of status.staged) {
-        lines.push(`  ${file}`);
-      }
-    }
-
-    if (status.modified.length > 0) {
-      lines.push("\nUnstaged modified:");
-      for (const file of status.modified) {
-        lines.push(`  ${file}`);
-      }
-    }
-
-    if (status.deleted.length > 0) {
-      lines.push("\nDeleted:");
-      for (const file of status.deleted) {
-        lines.push(`  ${file}`);
-      }
-    }
-
-    if (status.not_added.length > 0) {
-      lines.push("\nUntracked:");
-      for (const file of status.not_added) {
-        lines.push(`  ${file}`);
-      }
-    }
-
-    if (status.created.length > 0) {
-      lines.push("\nCreated (tracked):");
-      for (const file of status.created) {
-        lines.push(`  ${file}`);
-      }
-    }
-
-    if (status.renamed.length > 0) {
-      lines.push("\nRenamed:");
-      for (const rename of status.renamed) {
-        lines.push(`  ${rename.from} -> ${rename.to}`);
-      }
-    }
-
-    return lines.join("\n");
-  },
-});
+const GIT_DIFF_RETURN_CAP = 16 * 1024;
 
 export const gitDiff = tool({
-  description: "Get the full diff of all changes compared to HEAD (both staged and unstaged)",
+  description:
+    "Rarely needed: status and per-file diffs are normally pre-fetched into the prompt. " +
+    "Use only to re-fetch the full unified diff when you need additional context beyond what is in the prompt.",
   parameters: z.object({}),
   execute: async () => {
     try {
-      return await git.diff(["HEAD"]);
+      const raw = await git.diff(["HEAD"]);
+      if (raw.length <= GIT_DIFF_RETURN_CAP) return raw;
+      return raw.slice(0, GIT_DIFF_RETURN_CAP) + `\n[gitDiff truncated at ${GIT_DIFF_RETURN_CAP} bytes; use readFile for specific files]`;
     } catch {
-      return await git.diff();
+      const fallback = await git.diff();
+      if (fallback.length <= GIT_DIFF_RETURN_CAP) return fallback;
+      return fallback.slice(0, GIT_DIFF_RETURN_CAP) + `\n[gitDiff truncated at ${GIT_DIFF_RETURN_CAP} bytes]`;
     }
   },
 });
 
 export const gitLog = tool({
-  description: "Get recent commit history for context on commit message conventions",
+  description:
+    "Get recent commit history to learn commit-message conventions. Use only when the convention is genuinely unclear from context.",
   parameters: z.object({
-    count: z.number().optional().default(5).describe("Number of recent commits to show"),
+    count: z.number().optional().default(5).describe("Number of recent commits to show (max 20)"),
   }),
   execute: async ({ count }) => {
-    const log = await git.log({ n: count });
+    const safeCount = Math.min(Math.max(count, 1), 20);
+    const log = await git.log({ n: safeCount });
     if (log.all.length === 0) {
       return "No commits yet.";
     }
-    return log.all
-      .map((entry) => `${entry.hash.slice(0, 7)} ${entry.message} (${entry.date})`)
-      .join("\n");
+    return log.all.map((entry) => `${entry.hash.slice(0, 7)} ${entry.message}`).join("\n");
   },
 });
