@@ -1,0 +1,29 @@
+src/zencommit.ts
+  s_a463178cd9d2fc::t_ee64b694472d81 359-360
+  s_a463178cd9d2fc::t_036d33061c2502 280,288-290
+  s_a463178cd9d2fc::t_7d147dab4d6b18 451-459,467
+  s_a463178cd9d2fc::t_b791f5bdfedd4b 262-266
+  s_a463178cd9d2fc::t_cb7074dfac4930 291
+  s_a463178cd9d2fc::t_535295527721cd 409
+  s_a463178cd9d2fc::t_d72388cf2b00e5 427
+  s_a463178cd9d2fc::t_d5652ef6f0d1f2 40,47,57,59,62,113-125,141-158,216-220,230-234,271,284,303,312,321,331,369,379,413,416-417,424-426,428-450,460-466,468-469,471-475,477-484,486-488,493,505-571
+  s_a463178cd9d2fc::t_39eabf1765db7b 339,346,354,395,402,419,470,476,491
+  s_a463178cd9d2fc::t_c59ea1138a847f 485,494
+  s_a463178cd9d2fc::t_fc304007087cb9 572
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b26b020429b7717c96f65dc957f434509d22c823",
+  "prompts": {},
+  "sessions": {
+    "s_a463178cd9d2fc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0648abd0cffeE3GzzADoljon44",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
