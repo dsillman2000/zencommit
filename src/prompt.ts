@@ -1,23 +1,54 @@
+/**
+ * Prompt construction and git-context pre-fetching.
+ *
+ * This module gathers the working-tree state (changed files, diffs) and
+ * assembles the system prompt the AI model receives to generate
+ * Conventional Commits.
+ */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { simpleGit, type StatusResult } from "simple-git";
 
+/** Maximum bytes per-file diff included in the prompt. */
 const PER_FILE_BUDGET = 4 * 1024;
+
+/** Maximum total bytes of all diffs combined in the prompt. */
 const TOTAL_DIFF_BUDGET = 32 * 1024;
+
+/** Maximum number of changed files considered when pre-fetching diffs. */
 const MAX_FILES_FOR_DIFF = 50;
 
 const cwd = process.cwd();
 const git = simpleGit(cwd);
 
+/**
+ * Normalised view of the files changed in the working tree.
+ *
+ * Derived from simple-git's ``StatusResult`` into a shape that is
+ * independent of the underlying git client.
+ */
 export interface ChangedFiles {
+  /** Files staged for commit (``git add``). */
   staged: string[];
+  /** Modified but unstaged files. */
   modified: string[];
+  /** Deleted but unstaged files. */
   deleted: string[];
+  /** Newly created but unstaged files. */
   created: string[];
+  /** Untracked files (not yet ``git add``-ed). */
   untracked: string[];
+  /** Renamed files, with both old and new paths. */
   renamed: { from: string; to: string }[];
 }
 
+/**
+ * Converts a simple-git status result into the normalised
+ * {@link ChangedFiles} shape.
+ *
+ * @param status - The status result from simple-git.
+ * @returns The normalised changed-files representation.
+ */
 export function changedFilesFromStatus(status: StatusResult): ChangedFiles {
   return {
     staged: status.staged,
@@ -29,6 +60,15 @@ export function changedFilesFromStatus(status: StatusResult): ChangedFiles {
   };
 }
 
+/**
+ * Collects every changed file path into a single flat array.
+ *
+ * For renamed files only the destination path is included; the old name
+ * is not part of the current working tree.
+ *
+ * @param files - The normalised changed-files record.
+ * @returns All unique file paths that are part of the change set.
+ */
 export function allChangedPaths(files: ChangedFiles): string[] {
   return [
     ...files.staged,
@@ -48,6 +88,18 @@ function truncateTo(text: string, maxChars: number): { text: string; truncated: 
   return { text: kept, truncated: true };
 }
 
+/**
+ * Fetches the git diff for a single file.
+ *
+ * Handles edge cases where the file is deleted (no diff to show) or
+ * untracked (no HEAD baseline), and falls back to scanning for unstaged
+ * changes when the HEAD diff is empty.
+ *
+ * @param file - Relative path to the file.
+ * @param deletedFiles - Set of files marked as deleted.
+ * @param untracked - Set of files marked as untracked.
+ * @returns A diff string or a human-readable status message.
+ */
 async function diffForFile(file: string, deletedFiles: Set<string>, untracked: Set<string>): Promise<string> {
   try {
     if (deletedFiles.has(file)) {
@@ -67,13 +119,32 @@ async function diffForFile(file: string, deletedFiles: Set<string>, untracked: S
   }
 }
 
+/**
+ * A single file's diff section within the prompt context.
+ */
 export interface DiffSection {
+  /** Relative file path. */
   path: string;
+  /** The diff text (may be truncated or omitted). */
   diff: string;
+  /** Whether the diff text was truncated due to the per-file budget. */
   truncated: boolean;
+  /** Whether the diff was fully omitted due to the total budget cap. */
   omitted?: boolean;
 }
 
+/**
+ * Builds diff sections for all changed files, respecting both per-file
+ * and total-size budgets.
+ *
+ * When the total budget is exceeded, remaining files are annotated as
+ * omitted so the model knows additional context is available via
+ * ``readFile``.
+ *
+ * @param files - The normalised changed-files record.
+ * @returns The list of diff sections and a flag indicating whether the
+ *          budget cap was hit.
+ */
 export async function buildDiffSections(files: ChangedFiles): Promise<{ sections: DiffSection[]; capHit: boolean }> {
   const deletedSet = new Set(files.deleted);
   const untrackedSet = new Set(files.untracked);
@@ -112,6 +183,13 @@ export async function buildDiffSections(files: ChangedFiles): Promise<{ sections
   return { sections, capHit };
 }
 
+/**
+ * Formats the changed-files list into a human-readable string for the
+ * model prompt.
+ *
+ * @param files - The normalised changed-files record.
+ * @returns A multi-line string grouped by change category.
+ */
 export function formatChangedFiles(files: ChangedFiles): string {
   const blocks: string[] = [];
   if (files.staged.length) blocks.push(`Staged:\n${files.staged.map((f) => `  ${f}`).join("\n")}`);
@@ -123,6 +201,15 @@ export function formatChangedFiles(files: ChangedFiles): string {
   return blocks.length === 0 ? "(none)" : blocks.join("\n\n");
 }
 
+/**
+ * Formats diff sections into a single string for the model prompt.
+ *
+ * Files whose diffs were truncated or omitted are annotated accordingly.
+ *
+ * @param sections - The diff sections to format.
+ * @param capHit - Whether the total budget was exceeded.
+ * @returns A formatted diff string.
+ */
 export function formatDiffSections(sections: DiffSection[], capHit: boolean): string {
   if (sections.length === 0) return "(no diffs)";
   const parts: string[] = [];
@@ -136,17 +223,37 @@ export function formatDiffSections(sections: DiffSection[], capHit: boolean): st
   return parts.join("\n\n");
 }
 
+/**
+ * All pre-fetched git context passed into the model prompt.
+ */
 export interface PrefetchedContext {
+  /** Normalised changed-files list. */
   changedFiles: ChangedFiles;
+  /** Flat array of all changed file paths. */
   allChangedPaths: string[];
+  /** Per-file diff sections (may be truncated or omitted). */
   diffSections: DiffSection[];
+  /** Whether the diff budget was exceeded. */
   diffCapHit: boolean;
+  /** Pre-formatted strings ready for inclusion in the prompt. */
   formatted: {
+    /** Formatted changed-files listing. */
     files: string;
+    /** Formatted diffs block. */
     diffs: string;
   };
 }
 
+/**
+ * Pre-computes all git context needed by the model prompt.
+ *
+ * Reads the working-tree status, normalises it, fetches diffs
+ * (respecting budgets), and pre-formats everything into a single
+ * {@link PrefetchedContext} object.
+ *
+ * @param status - The status result from simple-git.
+ * @returns A fully-formed context object ready for prompt construction.
+ */
 export async function precomputeContext(status: StatusResult): Promise<PrefetchedContext> {
   const changedFiles = changedFilesFromStatus(status);
   const allPaths = allChangedPaths(changedFiles);
@@ -163,6 +270,16 @@ export async function precomputeContext(status: StatusResult): Promise<Prefetche
   };
 }
 
+/**
+ * Loads the project's ``AGENTS.md`` file for inclusion in the system
+ * prompt.
+ *
+ * The content is appended so the model can follow project-specific
+ * commit conventions defined in that file.
+ *
+ * @returns The AGENTS.md content wrapped with a header, or an empty
+ *          string if the file does not exist.
+ */
 export async function loadAgentsMd(): Promise<string> {
   try {
     const content = await readFile(join(cwd, "AGENTS.md"), "utf-8");
@@ -172,6 +289,13 @@ export async function loadAgentsMd(): Promise<string> {
   }
 }
 
+/**
+ * System prompt sent to the AI model.
+ *
+ * Instructs the model to generate Conventional Commits output as raw JSON
+ * without markdown wrapping, respecting budgets and considering the
+ * pre-fetched diff context.
+ */
 export const SYSTEM_PROMPT = `You are an expert at writing conventional commit messages for git repositories.
 
 **Workflow**
