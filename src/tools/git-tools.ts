@@ -6,10 +6,17 @@
  */
 import { tool } from "ai";
 import { z } from "zod";
-import { simpleGit } from "simple-git";
+import { simpleGit, type SimpleGit } from "simple-git";
 
 const cwd = process.cwd();
-const git = simpleGit(cwd);
+let git: SimpleGit = simpleGit(cwd);
+
+/** @internal Replace the git instance for testing. */
+export function __setGit(newGit: SimpleGit): SimpleGit {
+  const prev = git;
+  git = newGit;
+  return prev;
+}
 
 /** Maximum bytes returned by the ``gitDiff`` tool before truncation. */
 const GIT_DIFF_RETURN_CAP = 16 * 1024;

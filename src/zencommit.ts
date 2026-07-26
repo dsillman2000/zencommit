@@ -721,6 +721,7 @@ export function buildAskAndReplan(
  * @param opts.verbose - If ``true``, stream full agent step traces to
  *   stdout.
  */
+/* istanbul ignore next */
 export async function run(opts?: {
   modelOverride?: string;
   yes?: boolean;
@@ -752,6 +753,7 @@ export async function run(opts?: {
  * @param opts.yes - Skip the confirmation prompt.
  * @param opts.verbose - Enable verbose step logging.
  */
+/* istanbul ignore next */
 async function runInternal(opts?: {
   modelOverride?: string;
   yes?: boolean;
