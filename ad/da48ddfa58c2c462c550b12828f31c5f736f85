@@ -1,0 +1,26 @@
+jest.config.js
+  s_b997d5bf909030::t_b6660864cd8bf9 9-10
+package.json
+  s_b997d5bf909030::t_4864297f058378 17-18
+AGENTS.md
+  s_b997d5bf909030::t_15c7dc0cb35125 15-17,26-27
+  s_b997d5bf909030::t_1bbf5ac1510f45 46-48
+.gitignore
+  s_b997d5bf909030::t_0fa5962276e535 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "adda48ddfa58c2c462c550b12828f31c5f736f85",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
