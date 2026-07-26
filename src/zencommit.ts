@@ -13,8 +13,8 @@
 import { generateText, Output, NoObjectGeneratedError, type LanguageModel } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
-import { createInterface } from "node:readline/promises";
-import { simpleGit } from "simple-git";
+import { createInterface, type Interface } from "node:readline/promises";
+import { simpleGit, type SimpleGit } from "simple-git";
 import { readConfig } from "./config.js";
 import { tools } from "./tools/index.js";
 import {
@@ -32,8 +32,31 @@ import {
   type FilesValidationIssue,
 } from "./repair.js";
 
+export class CommitFlowError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CommitFlowError";
+  }
+}
+
 const cwd = process.cwd();
-const git = simpleGit(cwd);
+let git: SimpleGit = simpleGit(cwd);
+
+/** @internal Replace the git instance for testing. */
+export function __setGit(newGit: SimpleGit): SimpleGit {
+  const prev = git;
+  git = newGit;
+  return prev;
+}
+
+let generateTextFn = generateText;
+
+/** @internal Replace the generateText function for testing. */
+export function __setGenerateText(fn: typeof generateText): typeof generateText {
+  const prev = generateTextFn;
+  generateTextFn = fn;
+  return prev;
+}
 
 /** ANSI reset code. */
 const Z = "\x1b[0m";
@@ -176,20 +199,6 @@ export function renderCommit(entry: CommitEntry, index: number): string {
 }
 
 /**
- * Prints the full commit plan to the terminal with a decorative border.
- *
- * @param commits - The commit entries to render.
- */
-function renderCommits(commits: CommitEntry[]): void {
-  const bar = "━".repeat(48);
-  console.log(bar);
-  for (let i = 0; i < commits.length; i++) {
-    console.log(renderCommit(commits[i], i));
-  }
-  console.log("\n" + bar + "\n");
-}
-
-/**
  * Serializes a commit plan to a pretty-printed JSON string.
  *
  * @param commits - The commit entries.
@@ -257,9 +266,6 @@ export function buildRefocusPrompt(context: PrefetchedContext, currentCommits: C
     "Respond with raw JSON only — no markdown fences, no commentary.",
   ].join("\n");
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyStep = any;
 
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
@@ -338,6 +344,370 @@ export function quietStepLogger(setLabel: (label: string) => void): (step: AnySt
 }
 
 /**
+ * Prints the full commit plan to the terminal with a decorative border.
+ *
+ * @param commits - The commit entries to render.
+ */
+export function renderCommits(commits: CommitEntry[]): void {
+  const bar = "━".repeat(48);
+  console.log(bar);
+  for (let i = 0; i < commits.length; i++) {
+    console.log(renderCommit(commits[i], i));
+  }
+  console.log("\n" + bar + "\n");
+}
+
+export interface Logger {
+  log: (...args: unknown[]) => void;
+  error: (...args: unknown[]) => void;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyStep = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyStepCallback = ((step: any) => void) | undefined;
+
+/**
+ * Validates the API key and model name in config.
+ *
+ * @returns The resolved model name.
+ * @throws {CommitFlowError} If key or model is missing.
+ */
+export function resolveModel(config: { key?: string; model?: string }, modelOverride?: string): string {
+  if (!config.key) {
+    throw new CommitFlowError(
+      "API key not configured.\nRun: zencommit config set key <your-openode-zen-api-key>",
+    );
+  }
+  const model = modelOverride ?? config.model;
+  if (!model) {
+    throw new CommitFlowError(
+      "Model not configured.\nRun: zencommit config set model <model-name>",
+    );
+  }
+  return model;
+}
+
+/**
+ * Returns ``true`` when the working tree has at least one change
+ * across any category.
+ */
+export function hasChanges(status: {
+  staged: string[];
+  modified: string[];
+  deleted: string[];
+  created: string[];
+  not_added: string[];
+  renamed: unknown[];
+}): boolean {
+  return (
+    status.staged.length > 0 ||
+    status.modified.length > 0 ||
+    status.deleted.length > 0 ||
+    status.created.length > 0 ||
+    status.not_added.length > 0 ||
+    status.renamed.length > 0
+  );
+}
+
+/**
+ * Ensures the session is interactive or ``--yes`` was passed.
+ *
+ * @throws {CommitFlowError} If not TTY and ``--yes`` was not given.
+ */
+export function ensureTTY(yes: boolean | undefined, isTTY: boolean): void {
+  if (!yes && !isTTY) {
+    throw new CommitFlowError(
+      "stdin is not a TTY. Run interactively or pass --yes to bypass the prompt.",
+    );
+  }
+}
+
+/** Combines the default system prompt with AGENTS.md conventions. */
+export function buildSystemContent(agentsMd: string): string {
+  return SYSTEM_PROMPT + agentsMd;
+}
+
+// ─── generateInitialPlan ────────────────────────────────────────
+
+export interface GenerateInitialPlanArgs {
+  model: LanguageModel;
+  systemContent: string;
+  context: PrefetchedContext;
+  promptOverride?: string;
+  onStep?: AnyStepCallback;
+  onLabel?: (label: string) => void;
+  logger: Logger;
+}
+
+/**
+ * Calls the model to produce an initial commit plan, with format
+ * repair and a retry on malformed JSON.
+ *
+ * @returns The parsed commit entries.
+ * @throws {CommitFlowError} If the model fails to produce valid output.
+ */
+export async function generateInitialPlan(args: GenerateInitialPlanArgs): Promise<CommitEntry[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result: any;
+
+  try {
+    result = await generateTextFn({
+      model: args.model,
+      system: args.systemContent,
+      prompt: buildUserPrompt(args.context, args.promptOverride),
+      tools,
+      maxSteps: 3,
+      experimental_output: Output.object({ schema: commitSchema }),
+      onStepFinish: args.onStep,
+    });
+  } catch (err) {
+    if (NoObjectGeneratedError.isInstance(err) && err.text) {
+      args.onLabel?.("Repairing malformed output…");
+      const repaired = repairJSON(err.text);
+      if (repaired) {
+        const parsed = commitSchema.safeParse(JSON.parse(repaired));
+        if (parsed.success) {
+          result = { experimental_output: parsed.data, usage: err.usage, steps: [] };
+        }
+      }
+      if (!result?.experimental_output) {
+        args.onLabel?.("Retrying with focused feedback…");
+        const retryPrompt = [
+          buildUserPrompt(args.context, args.promptOverride),
+          "",
+          "---",
+          buildFormatRetryFeedback(err.text),
+        ].join("\n");
+        try {
+          result = await generateTextFn({
+            model: args.model,
+            system: args.systemContent,
+            prompt: retryPrompt,
+            tools: {},
+            maxSteps: 1,
+            experimental_output: Output.object({ schema: commitSchema }),
+            onStepFinish: args.onStep,
+          });
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          throw new CommitFlowError(`failed to parse model output after retry: ${retryMsg}`);
+        }
+      }
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new CommitFlowError(message);
+    }
+  }
+
+  if (!result?.experimental_output) {
+    throw new CommitFlowError("No commit messages generated.");
+  }
+  return result.experimental_output.commits as CommitEntry[];
+}
+
+// ─── fixFileCoverage ────────────────────────────────────────────
+
+export interface FixFileCoverageArgs {
+  model: LanguageModel;
+  systemContent: string;
+  context: PrefetchedContext;
+  commits: CommitEntry[];
+  knownFiles: string[];
+  promptOverride?: string;
+  onStep?: AnyStepCallback;
+  onLabel?: (label: string) => void;
+  logger: Logger;
+}
+
+/**
+ * Validates file coverage in the commit plan and retries with the
+ * model if coverage is incomplete or incorrect.
+ *
+ * @returns The validated commit entries (original or retried).
+ * @throws {CommitFlowError} If the model cannot produce valid coverage.
+ */
+export async function fixFileCoverage(args: FixFileCoverageArgs): Promise<CommitEntry[]> {
+  let commits = args.commits;
+
+  const filesIssue = validateFileCoverage(
+    commits.map((c) => c.files),
+    args.knownFiles,
+  );
+
+  if (hasFileIssue(filesIssue)) {
+    args.onLabel?.("Correcting file coverage…");
+    const retryPrompt = [
+      buildUserPrompt(args.context, args.promptOverride),
+      "",
+      "---",
+      buildFilesRetryFeedback(filesIssue),
+    ].join("\n");
+    try {
+      const retryResult = await generateTextFn({
+        model: args.model,
+        system: args.systemContent,
+        prompt: retryPrompt,
+        tools: {},
+        maxSteps: 1,
+        experimental_output: Output.object({ schema: commitSchema }),
+        onStepFinish: args.onStep,
+      });
+      if (retryResult.experimental_output) {
+        const retryCommits = retryResult.experimental_output.commits as CommitEntry[];
+        const retryIssue = validateFileCoverage(
+          retryCommits.map((c) => c.files),
+          args.knownFiles,
+        );
+        if (!hasFileIssue(retryIssue)) {
+          commits = retryCommits;
+        } else {
+          args.logger.error("Error: model could not produce a valid file-coverage set on retry.");
+          logFileIssue(retryIssue);
+          throw new CommitFlowError("model could not produce a valid file-coverage set on retry.");
+        }
+      }
+    } catch (err) {
+      if (err instanceof CommitFlowError) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new CommitFlowError(`file-coverage retry failed: ${message}`);
+    }
+  }
+
+  return commits;
+}
+
+// ─── runInteractiveLoop ─────────────────────────────────────────
+
+export type InteractiveDecision =
+  | { action: "accept" }
+  | { action: "abort" }
+  | { action: "revise"; revisedCommits: CommitEntry[] };
+
+export type AskAndReplan = (
+  commits: CommitEntry[],
+  revisionCount: number,
+) => Promise<InteractiveDecision>;
+
+/**
+ * Presents the commit plan to the user, collects feedback, and
+ * iterates until the user accepts or aborts.
+ *
+ * @param initialCommits - The first-pass commit plan.
+ * @param opts - Options including the ``--yes`` flag.
+ * @param askAndReplan - Callback that prompts the user and optionally
+ *   re-plans.
+ * @returns The final commit list and revision metadata.
+ */
+export async function runInteractiveLoop(
+  initialCommits: CommitEntry[],
+  opts: { yes?: boolean },
+  askAndReplan: AskAndReplan,
+): Promise<{ commits: CommitEntry[]; aborted: boolean; revisionCount: number }> {
+  if (opts.yes) {
+    return { commits: initialCommits, aborted: false, revisionCount: 0 };
+  }
+
+  let commits = initialCommits;
+  let revisionCount = 0;
+
+  while (true) {
+    renderCommits(commits);
+
+    const decision = await askAndReplan(commits, revisionCount);
+    if (decision.action === "accept") {
+      return { commits, aborted: false, revisionCount };
+    }
+    if (decision.action === "abort") {
+      return { commits, aborted: true, revisionCount };
+    }
+    commits = decision.revisedCommits;
+    revisionCount++;
+  }
+}
+
+// ─── executeCommits ─────────────────────────────────────────────
+
+/**
+ * Stages and commits each entry via git.
+ *
+ * @param git_ - The simple-git instance.
+ * @param commits - The commit entries to execute.
+ * @param logger - Logger for output.
+ */
+export async function executeCommits(git_: SimpleGit, commits: CommitEntry[], logger: Logger): Promise<void> {
+  for (const entry of commits) {
+    await git_.add(entry.files);
+    await git_.commit(message(entry));
+  }
+  logger.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
+}
+
+// ─── buildAskAndReplan ──────────────────────────────────────────
+
+/**
+ * Builds an {@link AskAndReplan} callback wired to a real readline
+ * interface and the model re-plan logic.
+ *
+ * @param rl - The readline interface.
+ * @param model - Language model instance.
+ * @param systemContent - Combined system prompt.
+ * @param context - Pre-fetched git context.
+ * @param opts - CLI options.
+ * @param onStep - Step-finished callback.
+ * @param setLabel - Status-label updater.
+ * @param logger - Logger.
+ * @returns An {@link AskAndReplan} callback.
+ */
+export function buildAskAndReplan(
+  rl: Interface,
+  model: LanguageModel,
+  systemContent: string,
+  context: PrefetchedContext,
+  opts: { verbose?: boolean; promptOverride?: string },
+  onStep: AnyStepCallback,
+  setLabel: (label: string) => void,
+  logger: Logger,
+): AskAndReplan {
+  return async (commits: CommitEntry[], revisionCount: number): Promise<InteractiveDecision> => {
+    try {
+      const answer = await rl.question("Enter to commit · Ctrl+C to abort · feedback: ");
+      const trimmed = answer.trim();
+      if (trimmed.length === 0) return { action: "accept" };
+
+      const newCount = revisionCount + 1;
+      if (opts.verbose) {
+        logger.log(`\n${D}─── Revision ${newCount} — feedback: ${truncate(trimmed, 200)} ───${Z}`);
+      }
+
+      const spinner = opts.verbose ? null : startSpinner(`Refining plan (revision ${newCount})…`);
+      const iterSetLabel = (l: string) => spinner?.update(l);
+      const iterOnStep: AnyStepCallback = opts.verbose
+        ? verboseStepLogger(true, iterSetLabel)
+        : quietStepLogger(iterSetLabel);
+
+      try {
+        const revisedCommits = await runReplan({
+          model,
+          systemContent,
+          context,
+          currentCommits: commits,
+          feedback: trimmed,
+          onStep: iterOnStep,
+          promptOverride: opts.promptOverride,
+        });
+        return { action: "revise", revisedCommits };
+      } finally {
+        if (spinner?.isRunning()) spinner.stop();
+      }
+    } catch (err) {
+      if (err instanceof CommitFlowError) throw err;
+      return { action: "abort" };
+    }
+  };
+}
+
+/**
  * Entry point for the commit-generation flow.
  *
  * Wraps {@link runInternal} with top-level error handling so unhandled
@@ -360,8 +730,12 @@ export async function run(opts?: {
   try {
     await runInternal(opts);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error: ${message}`);
+    if (err instanceof CommitFlowError) {
+      console.error(`Error: ${err.message}`);
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Error: ${message}`);
+    }
     process.exit(1);
   }
 }
@@ -385,280 +759,104 @@ async function runInternal(opts?: {
   promptOverride?: string;
 }): Promise<void> {
   const config = await readConfig();
-
-  if (!config.key) {
-    console.error("Error: API key not configured.");
-    console.error("Run: zencommit config set key <your-openode-zen-api-key>");
-    process.exit(1);
-  }
-
-  const modelName = opts?.modelOverride ?? config.model;
-
-  if (!modelName) {
-    console.error("Error: Model not configured.");
-    console.error("Run: zencommit config set model <model-name>");
-    process.exit(1);
-  }
+  const modelName = resolveModel(config, opts?.modelOverride);
 
   const status = await git.status();
-  if (status.staged.length === 0 &&
-      status.modified.length === 0 &&
-      status.deleted.length === 0 &&
-      status.created.length === 0 &&
-      status.not_added.length === 0 &&
-      status.renamed.length === 0) {
+  if (!hasChanges(status)) {
     console.log("Nothing to commit. Working tree clean.");
     return;
   }
 
-  if (!opts?.yes && !process.stdin.isTTY) {
-    console.error("Error: stdin is not a TTY. Run interactively or pass --yes to bypass the prompt.");
-    process.exit(1);
-  }
+  ensureTTY(opts?.yes, process.stdin.isTTY);
 
   const context = await precomputeContext(status);
   const knownFiles = allChangedPaths(context.changedFiles);
-
-  const agentsMdContent = await loadAgentsMd();
-  const systemContent = SYSTEM_PROMPT + agentsMdContent;
+  const agentsMd = await loadAgentsMd();
+  const systemContent = buildSystemContent(agentsMd);
 
   const provider = createOpenAICompatible({
     name: "zen",
     baseURL: "https://opencode.ai/zen/v1",
     apiKey: config.key,
   });
-
   const model: LanguageModel = provider(modelName);
-  let activeSpinner: SpinnerHandle | null = opts?.verbose ? null : startSpinner("Analyzing changes…");
+
+  const spinner: SpinnerHandle | null = opts?.verbose ? null : startSpinner("Analyzing changes…");
+  const setLabel = (label: string) => spinner?.update(label);
+  const stopSpinner = () => { if (spinner?.isRunning()) spinner.stop(); };
+  const onStepVerbose = verboseStepLogger(Boolean(opts?.verbose), setLabel);
+  const onStepQuiet = opts?.verbose ? undefined : quietStepLogger(setLabel);
+  const onStep: AnyStepCallback = opts?.verbose ? onStepVerbose : onStepQuiet;
 
   if (opts?.verbose) {
     console.log(`${D}─── Verbose agent logs ───${Z}`);
-    console.log(`${D}│ system prompt:${Z} ${systemContent.length} chars${agentsMdContent ? " (AGENTS.md appended)" : ""}`);
+    console.log(`${D}│ system prompt:${Z} ${systemContent.length} chars${agentsMd ? " (AGENTS.md appended)" : ""}`);
   }
 
-  const setLabel = (label: string): void => {
-    activeSpinner?.update(label);
-  };
-  const stopActiveSpinner = (): void => {
-    if (activeSpinner?.isRunning()) activeSpinner.stop();
-  };
-  const onStepVerbose = verboseStepLogger(Boolean(opts?.verbose), setLabel);
-  const onStepQuiet = opts?.verbose ? undefined : quietStepLogger(setLabel);
-  const onStep = opts?.verbose ? onStepVerbose : onStepQuiet;
+  let commits = await generateInitialPlan({
+    model,
+    systemContent,
+    context,
+    promptOverride: opts?.promptOverride,
+    onStep,
+    onLabel: setLabel,
+    logger: console,
+  });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let result: any;
-
-  try {
-    result = await generateText({
-      model,
-      system: systemContent,
-      prompt: buildUserPrompt(context, opts?.promptOverride),
-      tools,
-      maxSteps: 3,
-      experimental_output: Output.object({ schema: commitSchema }),
-      onStepFinish: onStep,
-    });
-  } catch (err) {
-    if (NoObjectGeneratedError.isInstance(err) && err.text) {
-      setLabel("Repairing malformed output…");
-      const repaired = repairJSON(err.text);
-      if (repaired) {
-        const parsed = commitSchema.safeParse(JSON.parse(repaired));
-        if (parsed.success) {
-          result = { experimental_output: parsed.data, usage: err.usage, steps: [] };
-        }
-      }
-      if (!result?.experimental_output) {
-        setLabel("Retrying with focused feedback…");
-        const retryPrompt = [
-          buildUserPrompt(context, opts?.promptOverride),
-          "",
-          "---",
-          buildFormatRetryFeedback(err.text),
-        ].join("\n");
-        try {
-          result = await generateText({
-            model,
-            system: systemContent,
-            prompt: retryPrompt,
-            tools: {},
-            maxSteps: 1,
-            experimental_output: Output.object({ schema: commitSchema }),
-            onStepFinish: onStep,
-          });
-        } catch (retryErr) {
-          stopActiveSpinner();
-          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-          console.error(`Error: failed to parse model output after retry: ${retryMsg}`);
-          process.exit(1);
-        }
-      }
-    } else {
-      stopActiveSpinner();
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Error: ${message}`);
-      process.exit(1);
-    }
-  }
-
-  if (!result.experimental_output) {
-    stopActiveSpinner();
-    console.error("Error: No commit messages generated.");
-    process.exit(1);
-  }
-
-  stopActiveSpinner();
-
-  let commits = result.experimental_output.commits as CommitEntry[];
-
-  const filesIssue = validateFileCoverage(
-    commits.map((c) => c.files),
+  commits = await fixFileCoverage({
+    model,
+    systemContent,
+    context,
+    commits,
     knownFiles,
-  );
+    promptOverride: opts?.promptOverride,
+    onStep,
+    onLabel: setLabel,
+    logger: console,
+  });
 
-  if (hasFileIssue(filesIssue)) {
-    setLabel("Correcting file coverage…");
-    const retryPrompt = [
-      buildUserPrompt(context, opts?.promptOverride),
-      "",
-      "---",
-      buildFilesRetryFeedback(filesIssue),
-    ].join("\n");
-    try {
-      const retryResult = await generateText({
-        model,
-        system: systemContent,
-        prompt: retryPrompt,
-        tools: {},
-        maxSteps: 1,
-        experimental_output: Output.object({ schema: commitSchema }),
-        onStepFinish: onStep,
-      });
-      if (retryResult.experimental_output) {
-        const retryCommits = retryResult.experimental_output.commits as CommitEntry[];
-        const retryIssue = validateFileCoverage(
-          retryCommits.map((c) => c.files),
-          knownFiles,
-        );
-        if (!hasFileIssue(retryIssue)) {
-          commits = retryCommits;
-        } else {
-          stopActiveSpinner();
-          console.error("Error: model could not produce a valid file-coverage set on retry.");
-          logFileIssue(retryIssue);
-          process.exit(1);
-        }
-      }
-    } catch (err) {
-      stopActiveSpinner();
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Error: file-coverage retry failed: ${message}`);
-      process.exit(1);
-    }
-  }
-
-  stopActiveSpinner();
+  stopSpinner();
 
   if (opts?.verbose) {
-    const totalSteps = result.steps?.length ?? 0;
-    console.log(`\n${D}─── End first-pass verbose logs (${totalSteps} steps, ${result.usage?.totalTokens ?? "?"} tokens) ───${Z}\n`);
+    console.log(`\n${D}─── End first-pass verbose logs ───${Z}\n`);
   }
 
-  let revisionCount = 0;
-
   if (commits.length === 0) {
-    stopActiveSpinner();
     console.log("No commits generated.");
     return;
   }
 
-  renderCommits(commits);
-
-  const sigintHandler = (): void => {
-    if (activeSpinner?.isRunning()) activeSpinner.stop();
-    if (!opts?.verbose) process.stdout.write("\n");
-    console.log("Aborted.");
-    process.exit(130);
-  };
-  process.on("SIGINT", sigintHandler);
-
-  let acceptAndCommit = !!opts?.yes;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const onSigint = () => rl.close();
+  process.on("SIGINT", onSigint);
 
   try {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const { commits: finalCommits, aborted, revisionCount } = await runInteractiveLoop(
+      commits,
+      { yes: !!opts?.yes },
+      buildAskAndReplan(rl, model, systemContent, context, { verbose: opts?.verbose, promptOverride: opts?.promptOverride }, onStep, setLabel, console),
+    );
 
-    try {
-      while (!acceptAndCommit) {
-        const answer = await rl.question("Enter to commit · Ctrl+C to abort · feedback: ");
-        const trimmed = answer.trim();
-        if (trimmed.length === 0) {
-          acceptAndCommit = true;
-          break;
-        }
-        revisionCount++;
-        if (opts?.verbose) {
-          console.log(`\n${D}─── Revision ${revisionCount} — feedback: ${truncate(trimmed, 200)} ───${Z}`);
-        }
-
-        activeSpinner = opts?.verbose ? null : startSpinner(`Refining plan (revision ${revisionCount})…`);
-        const iterSetLabel = (label: string): void => {
-          activeSpinner?.update(label);
-        };
-        const iterOnStep = opts?.verbose
-          ? verboseStepLogger(true, iterSetLabel)
-          : quietStepLogger(iterSetLabel);
-
-        try {
-          commits = await runReplan({
-            model,
-            systemContent,
-            context,
-            currentCommits: commits,
-            feedback: trimmed,
-            onStep: iterOnStep,
-            promptOverride: opts?.promptOverride,
-          });
-        } catch (replanErr) {
-          stopActiveSpinner();
-          rl.close();
-          const message = replanErr instanceof Error ? replanErr.message : String(replanErr);
-          console.error(`Error: revision failed: ${message}`);
-          process.exit(1);
-        }
-        stopActiveSpinner();
-        if (commits.length === 0) {
-          rl.close();
-          console.log("No commits generated.");
-          return;
-        }
-        renderCommits(commits);
-      }
-    } finally {
-      rl.close();
+    if (aborted) {
+      console.log("Aborted.");
+      return;
     }
+
+    if (opts?.verbose) {
+      console.log(`\n${D}─── Committed after ${revisionCount} revision(s) ───${Z}`);
+    }
+
+    await executeCommits(git, finalCommits, console);
   } finally {
-    process.off("SIGINT", sigintHandler);
+    rl.close();
+    process.off("SIGINT", onSigint);
   }
-
-  stopActiveSpinner();
-
-  if (opts?.verbose) {
-    console.log(`\n${D}─── Committed after ${revisionCount} revision(s) ───${Z}`);
-  }
-
-  for (const entry of commits) {
-    await git.add(entry.files);
-    await git.commit(message(entry));
-  }
-
-  console.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
 }
 
 /**
  * Arguments for {@link runReplan}.
  */
-interface RunReplanArgs {
+export interface RunReplanArgs {
   /** Configured language model instance. */
   model: LanguageModel;
   /** System prompt (including AGENTS.md if present). */
@@ -670,8 +868,7 @@ interface RunReplanArgs {
   /** User's free-text revision feedback. */
   feedback: string;
   /** Optional step-finished callback for logging. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onStep: ((step: any) => void) | undefined;
+  onStep: AnyStepCallback;
   /** Custom user instruction prepended to the prompt. */
   promptOverride?: string;
 }
@@ -686,7 +883,7 @@ interface RunReplanArgs {
  * @returns The revised commit entries.
  * @throws {Error} If the model cannot produce a valid plan after retry.
  */
-async function runReplan({
+export async function runReplan({
   model,
   systemContent,
   context,
@@ -698,7 +895,7 @@ async function runReplan({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let result: any;
   try {
-    result = await generateText({
+    result = await generateTextFn({
       model,
       system: systemContent,
       prompt: buildRefocusPrompt(context, currentCommits, feedback, promptOverride),
@@ -722,7 +919,7 @@ async function runReplan({
         "---",
         buildFormatRetryFeedback(err.text),
       ].join("\n");
-      const retryResult = await generateText({
+      const retryResult = await generateTextFn({
         model,
         system: systemContent,
         prompt: retryPrompt,
