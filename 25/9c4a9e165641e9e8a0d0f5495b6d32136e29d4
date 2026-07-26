@@ -1,0 +1,24 @@
+src/tools/file-tools.ts
+  s_a463178cd9d2fc::t_1e17cc6c4a5d07 7,10-11,27,29,34-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "259c4a9e165641e9e8a0d0f5495b6d32136e29d4",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  },
+  "sessions": {
+    "s_a463178cd9d2fc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0648abd0cffeE3GzzADoljon44",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
