@@ -1,0 +1,22 @@
+src/models.ts
+  s_170f7049b99d07::t_b4cf0e108260af 1-178
+src/index.ts
+  s_170f7049b99d07::t_0c285ad7563fc3 14,29-40
+  s_170f7049b99d07::t_e29d25ff35edd9 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2094b50957035b33a8e3432a5e1e55242b1efa94",
+  "prompts": {},
+  "sessions": {
+    "s_170f7049b99d07": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_061bf2c38ffeB19C0aklc6KJNA",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
