@@ -46,3 +46,16 @@ npm run test:integration  # integration/benchmark suite (requires API key, netwo
 - **`--stats` hidden CLI flag**: The `--stats` flag runs zencommit in a non-interactive, non-committing mode that emits a full JSON performance report to stdout. Used by the integration test suite. Not shown in `--help`. The `"types"` field in the schema nullable for `scope` — many models output `"scope": null` instead of omitting it.
 - **Integration test suite**: Lives in `tests/integration/`. Requires `RUN_INTEGRATION_TESTS=1` environment variable. Orchestration config at `tests/integration.config.json` controls model list, trial count, project type, and scenario. Fixtures are at `tests/fixtures/<project-type>/`. Build fixtures via `node tests/scripts/build-fixture.mjs <scenario>`.
 - **Two Jest configs**: `jest.config.js` (fast unit tests, excludes `*.integration.test.ts`) and `jest.integration.config.js` (network-dependent, long timeout, runs from `tsconfig.test.json`). Integration tests spawn `dist/index.js --stats` per trial.
+
+## GitHub CLI conventions
+
+When using the `gh` CLI to create a GitHub PR or issue:
+
+- **Never use heredoc syntax** for the body. Instead, write the markdown content to a temporary file (e.g., `/tmp/gh-pr-body.md` or under the system temp dir), pass it via `--body-file`, and clean up the file afterward.
+- **Always sign off** the markdown content with a horizontal rule and an italicized attribution at the end:
+
+  ```
+  ---
+
+  *Written by OpenCode.*
+  ```
