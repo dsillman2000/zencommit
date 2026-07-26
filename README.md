@@ -14,7 +14,7 @@ zencommit requires an OpenCode Zen API key. Set your key and preferred model:
 
 ```bash
 zencommit config set key "sk-opencode-..."
-zencommit config set model "gpt-4o"
+zencommit config set model "deepseek-v4-flash"
 zencommit config validate
 ```
 
@@ -64,9 +64,9 @@ zencommit
 | `-p, --prompt <prompt>` | Inject a custom instruction into the user prompt, before the diff context |
 
 ```bash
-zencommit -m "claude-sonnet-4-20250514"
+zencommit -m "claude-sonnet-4"
 zencommit -y
-zencommit -y -m "gpt-4o"
+zencommit -y -m "deepseek-v4-flash"
 zencommit -v
 zencommit -p "Use emoji prefixes in commit messages"
 zencommit -p "Group all test file changes into a single separate commit"
@@ -82,6 +82,27 @@ zencommit config get <key>            # Get a config value
 zencommit config show                 # Display full configuration
 zencommit config validate             # Validate API key and model availability
 ```
+
+### `zencommit models`
+
+List available OpenCode Zen models with their per-1M-token pricing:
+
+```bash
+zencommit models
+```
+
+Example output:
+
+```
+Model ID                Input/1M    Output/1M
+────────────────────────────────────────────────
+claude-sonnet-4           $3.00      $15.00
+deepseek-v4-flash         $0.14       $0.28
+gpt-5.4-mini              $0.75       $4.50
+north-mini-code-free       Free        Free
+```
+
+Model data is fetched from [models.dev](https://models.dev/providers/opencode/) and cached locally for up to 6 hours.
 
 ### Validation
 
