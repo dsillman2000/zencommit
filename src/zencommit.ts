@@ -208,8 +208,12 @@ export function commitsAsJson(commits: CommitEntry[]): string {
  * @param context - Pre-fetched git context.
  * @returns The complete user-prompt string.
  */
-export function buildUserPrompt(context: PrefetchedContext): string {
-  return [
+export function buildUserPrompt(context: PrefetchedContext, customPrompt?: string): string {
+  const parts: string[] = [];
+  if (customPrompt) {
+    parts.push(customPrompt, "");
+  }
+  parts.push(
     "<changed_files>",
     context.formatted.files,
     "</changed_files>",
@@ -220,7 +224,8 @@ export function buildUserPrompt(context: PrefetchedContext): string {
     "",
     "Analyze the above and produce conventional commit messages for all changes.",
     "Respond with raw JSON only — no markdown fences, no commentary.",
-  ].join("\n");
+  );
+  return parts.join("\n");
 }
 
 /**
@@ -235,9 +240,9 @@ export function buildUserPrompt(context: PrefetchedContext): string {
  * @param feedback - The user's free-text revision feedback.
  * @returns The complete refocus-prompt string.
  */
-export function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
+export function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string, customPrompt?: string): string {
   return [
-    buildUserPrompt(context),
+    buildUserPrompt(context, customPrompt),
     "",
     "<previous_plan>",
     commitsAsJson(currentCommits),
@@ -350,6 +355,7 @@ export async function run(opts?: {
   modelOverride?: string;
   yes?: boolean;
   verbose?: boolean;
+  promptOverride?: string;
 }): Promise<void> {
   try {
     await runInternal(opts);
@@ -376,6 +382,7 @@ async function runInternal(opts?: {
   modelOverride?: string;
   yes?: boolean;
   verbose?: boolean;
+  promptOverride?: string;
 }): Promise<void> {
   const config = await readConfig();
 
@@ -446,7 +453,7 @@ async function runInternal(opts?: {
     result = await generateText({
       model,
       system: systemContent,
-      prompt: buildUserPrompt(context),
+      prompt: buildUserPrompt(context, opts?.promptOverride),
       tools,
       maxSteps: 3,
       experimental_output: Output.object({ schema: commitSchema }),
@@ -465,7 +472,7 @@ async function runInternal(opts?: {
       if (!result?.experimental_output) {
         setLabel("Retrying with focused feedback…");
         const retryPrompt = [
-          buildUserPrompt(context),
+          buildUserPrompt(context, opts?.promptOverride),
           "",
           "---",
           buildFormatRetryFeedback(err.text),
@@ -513,7 +520,7 @@ async function runInternal(opts?: {
   if (hasFileIssue(filesIssue)) {
     setLabel("Correcting file coverage…");
     const retryPrompt = [
-      buildUserPrompt(context),
+      buildUserPrompt(context, opts?.promptOverride),
       "",
       "---",
       buildFilesRetryFeedback(filesIssue),
@@ -610,6 +617,7 @@ async function runInternal(opts?: {
             currentCommits: commits,
             feedback: trimmed,
             onStep: iterOnStep,
+            promptOverride: opts?.promptOverride,
           });
         } catch (replanErr) {
           stopActiveSpinner();
@@ -664,6 +672,8 @@ interface RunReplanArgs {
   /** Optional step-finished callback for logging. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onStep: ((step: any) => void) | undefined;
+  /** Custom user instruction prepended to the prompt. */
+  promptOverride?: string;
 }
 
 /**
@@ -683,6 +693,7 @@ async function runReplan({
   currentCommits,
   feedback,
   onStep,
+  promptOverride,
 }: RunReplanArgs): Promise<CommitEntry[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let result: any;
@@ -690,7 +701,7 @@ async function runReplan({
     result = await generateText({
       model,
       system: systemContent,
-      prompt: buildRefocusPrompt(context, currentCommits, feedback),
+      prompt: buildRefocusPrompt(context, currentCommits, feedback, promptOverride),
       tools: {},
       maxSteps: 1,
       experimental_output: Output.object({ schema: commitSchema }),
@@ -706,7 +717,7 @@ async function runReplan({
         }
       }
       const retryPrompt = [
-        buildRefocusPrompt(context, currentCommits, feedback),
+        buildRefocusPrompt(context, currentCommits, feedback, promptOverride),
         "",
         "---",
         buildFormatRetryFeedback(err.text),

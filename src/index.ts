@@ -20,12 +20,18 @@ program
   .version("0.1.0")
   .option("-m, --model <model>", "Override the model from config")
   .option("-y, --yes", "Auto-accept commit suggestions without prompting")
-  .option("-v, --verbose", "Stream agent thoughts, tool calls, and responses");
+  .option("-v, --verbose", "Stream agent thoughts, tool calls, and responses")
+  .option("-p, --prompt <prompt>", "Inject a custom instruction into the user prompt");
 
 program.addCommand(configCommand);
 
 program.action(async (options) => {
-  await run({ modelOverride: options.model as string | undefined, yes: options.yes as boolean, verbose: options.verbose as boolean });
+  await run({
+    modelOverride: options.model as string | undefined,
+    yes: options.yes as boolean,
+    verbose: options.verbose as boolean,
+    promptOverride: options.prompt as string | undefined,
+  });
 });
 
 program.parse();
