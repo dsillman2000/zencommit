@@ -1,0 +1,38 @@
+jest.config.js
+  s_f28227205e6d4b::t_676d2caf856b95 1-24
+src/config.test.ts
+  s_f28227205e6d4b::t_a47de75446496f 1-79
+src/zencommit.test.ts
+  s_f28227205e6d4b::t_c026f16b46597d 92,97
+  s_f28227205e6d4b::t_431cf02e8c73b9 19-21,23
+  s_f28227205e6d4b::t_95e55b236e2846 59-60,64-65,70-71
+  s_f28227205e6d4b::t_2b5d81c454abb6 22,24-25
+  s_f28227205e6d4b::t_299f878eee4dbd 87
+  s_f28227205e6d4b::t_971aa8069e661d 1-18,26-58,61-63,66-69,72-86,88-91,93-96,98-452
+package.json
+  s_f28227205e6d4b::t_30589ff06e4b15 31-32,35-36
+  s_f28227205e6d4b::t_3b68368102dc74 15-17
+src/prompt.test.ts
+  s_f28227205e6d4b::t_67b739b86f7400 2-199
+  s_f28227205e6d4b::t_e30f0d0f90f12c 200-203
+  s_f28227205e6d4b::t_faab6f34b2f27a 1
+src/repair.test.ts
+  s_f28227205e6d4b::t_d4ff9d1b98ec85 1
+  s_f28227205e6d4b::t_74e4c44aaf1410 2-240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "464f53b3c66b3532f80aa8b19f192d103933d064",
+  "prompts": {},
+  "sessions": {
+    "s_f28227205e6d4b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_063e5cf91ffeywgaj2wT4fWGIF",
+        "model": "deepseek-v4-pro"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
