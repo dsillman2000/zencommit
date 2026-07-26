@@ -4,8 +4,9 @@
   "models": [
     "big-pickle",
     "nemotron-3-ultra-free",
-    "deepseek-v4-flash-free"
+    "deepseek-v4-flash-free",
+    "laguna-s-2.1-free"
   ],
-  "trialsPerModel": 5,
+  "trialsPerModel": 20,
   "spawnTimeoutMs": 120000
 }
