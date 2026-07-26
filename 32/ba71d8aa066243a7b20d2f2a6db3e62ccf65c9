@@ -1,0 +1,28 @@
+tests/integration.config.json
+  h_4cc74772b10fd4 7-12,14
+src/models.test.ts
+  s_73d40ea7425baf::t_0f8283eb322136 279-286
+src/models.ts
+  s_73d40ea7425baf::t_173fb2658408fb 62-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "32ba71d8aa066243a7b20d2f2a6db3e62ccf65c9",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  },
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
