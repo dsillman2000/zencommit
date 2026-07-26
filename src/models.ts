@@ -33,8 +33,15 @@ interface ModelsDevModel {
 
 const configDir = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
 const cacheDirPath = join(configDir, "zencommit");
-const cacheFilePath = join(cacheDirPath, "models-cache.json");
+let cacheFilePath = join(cacheDirPath, "models-cache.json");
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** @internal Replace the cache file path for testing. */
+export function __setCacheFilePath(path: string): string {
+  const prev = cacheFilePath;
+  cacheFilePath = path;
+  return prev;
+}
 
 async function loadCache(): Promise<PricingCache | null> {
   try {
@@ -60,11 +67,21 @@ function isCacheFresh(cache: PricingCache): boolean {
 const ZEN_API = "https://opencode.ai/zen/v1/models";
 const MODELS_DEV_API = "https://models.dev/api.json";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let fetchFn: typeof fetch = (...args) => (globalThis.fetch as any)(...args);
+
+/** @internal Replace the fetch implementation for testing. */
+export function __setFetch(fn: typeof fetch): typeof fetch {
+  const prev = fetchFn;
+  fetchFn = fn;
+  return prev;
+}
+
 /**
  * Fetches the list of available model IDs from the OpenCode Zen API.
  */
 export async function fetchModelIds(): Promise<string[]> {
-  const res = await fetch(ZEN_API);
+  const res = await fetchFn(ZEN_API);
   if (!res.ok) {
     throw new Error(`failed to fetch models from Zen API: ${res.status}`);
   }
@@ -87,7 +104,7 @@ export async function fetchPricingMap(): Promise<Map<string, Cost>> {
   }
 
   try {
-    const res = await fetch(MODELS_DEV_API);
+    const res = await fetchFn(MODELS_DEV_API);
     if (!res.ok) {
       throw new Error(`models.dev API returned ${res.status}`);
     }
@@ -165,6 +182,19 @@ export function formatTable(rows: ModelRow[]): string {
 // ─── Orchestrator ─────────────────────────────────────────────────
 
 /**
+ * Builds the formatted table string for the given model list and
+ * pricing map. Pure function — does no I/O — extracted so the output
+ * formatting can be unit-tested in isolation.
+ */
+export function printModelsList(
+  modelIds: string[],
+  pricing: Map<string, Cost>,
+): string {
+  const rows = buildModelsTable(modelIds, pricing);
+  return formatTable(rows);
+}
+
+/**
  * Fetches the current OpenCode Zen model list and pricing, then
  * prints a compact table to stdout.
  */
@@ -173,6 +203,5 @@ export async function listModels(): Promise<void> {
     fetchModelIds(),
     fetchPricingMap(),
   ]);
-  const rows = buildModelsTable(modelIds, pricing);
-  console.log(formatTable(rows));
+  console.log(printModelsList(modelIds, pricing));
 }
