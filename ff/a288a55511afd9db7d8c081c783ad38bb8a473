@@ -1,0 +1,26 @@
+.github/workflows/ci.yml
+  s_bf8be0d2ccd34b::t_38113a496db081 1-28
+eslint.config.js
+  s_bf8be0d2ccd34b::t_21cfa8be3ab18d 1-10
+package.json
+  s_bf8be0d2ccd34b::t_c13a6edf42ab09 28,30,32-33
+  s_bf8be0d2ccd34b::t_253c3e985e4c21 13-15
+package-lock.json
+  s_bf8be0d2ccd34b::t_4bf74b76e778c8 24,26,28-29,608-801,847-867,878-1130,1157-1196,1218-1232,1250-1256,1277-1538,1540-1542,1545,1547-1562,1565-1571,1587-1656,1663-1676,1694-1749,1774-1883,1900-1935,1978-2007,2027-2039,2054-2077,2085-2094,2104-2142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ffa288a55511afd9db7d8c081c783ad38bb8a473",
+  "prompts": {},
+  "sessions": {
+    "s_bf8be0d2ccd34b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_063f8b24fffeSm1z2i220LXGkb",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
