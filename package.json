@@ -12,7 +12,9 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.10",
@@ -26,8 +28,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.15.29",
     "eslint": "^10.8.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.65.0"
