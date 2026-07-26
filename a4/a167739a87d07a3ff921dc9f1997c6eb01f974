@@ -1,0 +1,21 @@
+src/tools/file-tools.test.ts
+  s_b997d5bf909030::t_8822b8d8afa634 5-7,10-12,15-17,20-22
+src/tools/file-tools.ts
+  s_b997d5bf909030::t_340a736682e932 24-25,35,42,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a4a167739a87d07a3ff921dc9f1997c6eb01f974",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
