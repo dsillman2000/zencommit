@@ -1,0 +1,21 @@
+src/tools/git-tools.ts
+  s_a463178cd9d2fc::t_08cfb35d8a622c 8,11-13,17-19,21-23,29-30,32,35-36,40
+src/tools/index.ts
+  s_a463178cd9d2fc::t_e1a85c93a13b4d 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d4b58705c211bd0bc175b89fa7a172576a0eeca7",
+  "prompts": {},
+  "sessions": {
+    "s_a463178cd9d2fc": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0648abd0cffeE3GzzADoljon44",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
