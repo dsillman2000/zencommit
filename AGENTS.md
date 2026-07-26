@@ -39,4 +39,5 @@ No test framework is configured.
 - **AGENTS.md is runtime data**: This file is read by the app at runtime and appended to the AI system prompt. It acts as project-specific commit conventions for the model.
 - **Uses OpenCode Zen API**: The app talks to `https://opencode.ai/zen/v1` via `@ai-sdk/openai-compatible`. The `@ai-sdk/openai`, `@ai-sdk/anthropic`, and `@ai-sdk/google` packages are unused deps.
 - **ESLint**: Flat config at `eslint.config.js` using `tseslint.configs.recommended`. Ignores `dist/`.
-- **`npm audit` in CI**: Set to `--audit-level=high` — pre-existing low/moderate vulns in `ai` SDK transitive deps don't fail the build.
+- **`npm audit` in CI**: Set to `--audit-level=high --omit=dev` — devDependencies (jest deps) are excluded from the audit. Pre-existing low/moderate vulns in `ai` SDK transitive deps don't fail the build.
+- **Pre-existing CVE-2026-8769**: `@ai-sdk/provider-utils <=3.0.97` has an Uncontrolled Resource Consumption issue (CVSS 4.3 MEDIUM / GHSA low). Fix requires `@ai-sdk/provider-utils >=4.0.33`. Awaiting `ai` SDK major bump — not actionable without breaking upstream changes.

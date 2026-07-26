@@ -1,12 +1,30 @@
+/**
+ * CLI ``config`` subcommand.
+ *
+ * Provides ``set``, ``get``, ``show``, and ``validate`` actions for
+ * managing the zencommit configuration file.
+ */
 import { Command } from "commander";
 import { readConfig, writeConfig, getConfigPath } from "../config.js";
 
+/** OpenCode Zen models listing endpoint. */
 const MODELS_URL = "https://opencode.ai/zen/v1/models";
 
+/** ANSI green. */
 const G = "\x1b[32m";
+/** ANSI red. */
 const R = "\x1b[31m";
+/** ANSI reset. */
 const Z = "\x1b[0m";
 
+/**
+ * Validates that an API key is configured.
+ *
+ * Logs a ``PASS`` or ``FAIL`` status to stdout.
+ *
+ * @param key - The API key to check (may be ``undefined``).
+ * @returns ``true`` if a key is configured, ``false`` otherwise.
+ */
 async function validateApiKey(key: string | undefined): Promise<boolean> {
   if (!key) {
     console.log(`${R}FAIL${Z}  API key — not configured (run: zencommit config set key <your-key>)`);
@@ -16,6 +34,17 @@ async function validateApiKey(key: string | undefined): Promise<boolean> {
   return true;
 }
 
+/**
+ * Validates that the configured model is available on the OpenCode Zen
+ * API.
+ *
+ * Fetches the models listing and checks whether the given model name
+ * appears in the response.
+ *
+ * @param model - The model name to validate (may be ``undefined``).
+ * @returns ``true`` if the model is available, ``false`` if not
+ *   configured, network unreachable, or not found.
+ */
 async function validateModel(model: string | undefined): Promise<boolean> {
   if (!model) {
     console.log(`${R}FAIL${Z}  Model — not configured (run: zencommit config set model <model-name>)`);
@@ -43,6 +72,16 @@ async function validateModel(model: string | undefined): Promise<boolean> {
   }
 }
 
+/**
+ * Commander command for managing zencommit configuration.
+ *
+ * Subcommands:
+ *
+ * - ``set <key> <value>`` — persist a config value.
+ * - ``get <key>`` — read a config value.
+ * - ``show`` — display the full config.
+ * - ``validate`` — check API key and model availability.
+ */
 export const configCommand = new Command("config")
   .description("Manage zencommit configuration");
 

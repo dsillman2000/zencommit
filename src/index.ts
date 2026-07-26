@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+/**
+ * zencommit CLI entry point.
+ *
+ * Sets up the Commander program with options and subcommands, then
+ * delegates to {@link run} for the core commit-generation flow.
+ *
+ * @module zencommit
+ */
 import { Command } from "commander";
 import { configCommand } from "./commands/config.js";
 import { run } from "./zencommit.js";

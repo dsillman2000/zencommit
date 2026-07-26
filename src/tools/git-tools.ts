@@ -1,3 +1,9 @@
+/**
+ * Git-related AI tool definitions.
+ *
+ * Tools in this module allow the model to fetch git state beyond the
+ * pre-fetched context in the prompt.
+ */
 import { tool } from "ai";
 import { z } from "zod";
 import { simpleGit } from "simple-git";
@@ -5,8 +11,21 @@ import { simpleGit } from "simple-git";
 const cwd = process.cwd();
 const git = simpleGit(cwd);
 
+/** Maximum bytes returned by the ``gitDiff`` tool before truncation. */
 const GIT_DIFF_RETURN_CAP = 16 * 1024;
 
+/**
+ * ``gitDiff`` tool — re-fetches the full working-tree diff.
+ *
+ * Normally the prompt already contains per-file diffs; this tool is
+ * only intended for cases where the model genuinely needs more context
+ * than what was pre-fetched.  Output is truncated at
+ * {@link GIT_DIFF_RETURN_CAP} bytes.
+ *
+ * @remarks
+ * Falls back to unstaged diff (``git diff``) when the HEAD diff fails
+ * (e.g. in a brand-new repository).
+ */
 export const gitDiff = tool({
   description:
     "Rarely needed: status and per-file diffs are normally pre-fetched into the prompt. " +
@@ -25,6 +44,13 @@ export const gitDiff = tool({
   },
 });
 
+/**
+ * ``gitLog`` tool — fetches recent commit history.
+ *
+ * Allows the model to learn commit-message conventions from the
+ * repository when the pattern is not obvious from context.  Returns
+ * truncated SHA-1 hashes and full commit messages.
+ */
 export const gitLog = tool({
   description:
     "Get recent commit history to learn commit-message conventions. Use only when the convention is genuinely unclear from context.",

@@ -1,3 +1,15 @@
+/**
+ * Core commit-generation logic.
+ *
+ * Orchestrates the full flow:
+ *
+ * 1. Reads config and validates the API key / model.
+ * 2. Pre-fetches git context (changed files, diffs).
+ * 3. Calls the OpenCode Zen API to generate a Conventional Commits plan.
+ * 4. Validates file coverage and repairs malformed output when needed.
+ * 5. Presents the plan interactively; accepts feedback / revisions.
+ * 6. Executes commits via simple-git.
+ */
 import { generateText, Output, NoObjectGeneratedError, type LanguageModel } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
@@ -23,10 +35,20 @@ import {
 const cwd = process.cwd();
 const git = simpleGit(cwd);
 
+/** ANSI reset code. */
 const Z = "\x1b[0m";
+/** ANSI bold. */
 const B = "\x1b[1m";
+/** ANSI dim. */
 const D = "\x1b[2m";
 
+/**
+ * Maps Conventional Commit types to their display colours in the terminal.
+ *
+ * Types that share the same colour (e.g. ``test`` / ``refactor``, or
+ * ``chore`` / ``ci`` / ``build``) are visually indistinguishable but
+ * semantically distinct.
+ */
 const typeColor: Record<string, string> = {
   feat: "\x1b[36m",    fix: "\x1b[33m",     docs: "\x1b[34m",
   style: "\x1b[35m",   refactor: "\x1b[32m", perf: "\x1b[31m",
@@ -34,13 +56,31 @@ const typeColor: Record<string, string> = {
   build: "\x1b[2m",    revert: "\x1b[31m",
 };
 
-interface SpinnerHandle {
+/**
+ * Handle for a terminal spinner animation.
+ *
+ * Allows callers to update the displayed label, stop the spinner, and
+ * check whether the animation is still active.
+ */
+export interface SpinnerHandle {
+  /** Updates the label shown next to the spinner. */
   update: (message: string) => void;
+  /** Stops the spinner and clears the line. */
   stop: () => void;
+  /** Returns ``true`` if the spinner is currently animating. */
   isRunning: () => boolean;
 }
 
-function startSpinner(message: string): SpinnerHandle {
+/**
+ * Starts a continuous spinner animation on the terminal.
+ *
+ * The spinner occupies a single line and rotates through a set of
+ * braille-dot characters while showing the given message.
+ *
+ * @param message - The initial label to display.
+ * @returns A {@link SpinnerHandle} for updating or stopping the spinner.
+ */
+export function startSpinner(message: string): SpinnerHandle {
   const chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   let i = 0;
   let current = message;
@@ -63,14 +103,28 @@ function startSpinner(message: string): SpinnerHandle {
   };
 }
 
-interface CommitEntry {
+/**
+ * A single commit entry in the AI-generated plan.
+ */
+export interface CommitEntry {
+  /** Conventional Commit type (e.g. ``feat``, ``fix``). */
   type: string;
+  /** Optional scope (e.g. ``api``, ``cli``). */
   scope?: string;
+  /** Imperative-mood, lowercase description. */
   description: string;
+  /** Exact relative file paths included in this commit. */
   files: string[];
 }
 
-const commitSchema = z.object({
+/**
+ * Zod schema for validating the AI model's JSON output.
+ *
+ * Defines the expected structure of the commit plan: an array of
+ * {@link CommitEntry} objects with enumerated types and required file
+ * lists.
+ */
+export const commitSchema = z.object({
   commits: z.array(
     z.object({
       type: z.enum([
@@ -88,20 +142,31 @@ const commitSchema = z.object({
   ),
 });
 
-function header(entry: CommitEntry): string {
+export function header(entry: CommitEntry): string {
   const c = typeColor[entry.type] ?? "";
   return entry.scope
     ? `${c}${entry.type}${Z}(${entry.scope}): ${entry.description}`
     : `${c}${entry.type}${Z}: ${entry.description}`;
 }
 
-function message(entry: CommitEntry): string {
+export function message(entry: CommitEntry): string {
   return entry.scope
     ? `${entry.type}(${entry.scope}): ${entry.description}`
     : `${entry.type}: ${entry.description}`;
 }
 
-function renderCommit(entry: CommitEntry, index: number): string {
+/**
+ * Renders a single commit entry for terminal display.
+ *
+ * Includes a numbered header, colourised commit type, and a bulleted
+ * file list.
+ *
+ * @param entry - The commit entry to render.
+ * @param index - Zero-based position in the commit list (displayed
+ *   as 1-based).
+ * @returns A formatted multi-line string.
+ */
+export function renderCommit(entry: CommitEntry, index: number): string {
   const lines = [
     `\n ${B}${String(index + 1).padStart(2, " ")}.${Z} ${header(entry)}`,
     ` ${D}Files${Z}`,
@@ -110,6 +175,11 @@ function renderCommit(entry: CommitEntry, index: number): string {
   return lines.join("\n");
 }
 
+/**
+ * Prints the full commit plan to the terminal with a decorative border.
+ *
+ * @param commits - The commit entries to render.
+ */
 function renderCommits(commits: CommitEntry[]): void {
   const bar = "━".repeat(48);
   console.log(bar);
@@ -119,11 +189,26 @@ function renderCommits(commits: CommitEntry[]): void {
   console.log("\n" + bar + "\n");
 }
 
-function commitsAsJson(commits: CommitEntry[]): string {
+/**
+ * Serializes a commit plan to a pretty-printed JSON string.
+ *
+ * @param commits - The commit entries.
+ * @returns A JSON string with ``{ commits: [...] }`` shape.
+ */
+export function commitsAsJson(commits: CommitEntry[]): string {
   return JSON.stringify({ commits }, null, 2);
 }
 
-function buildUserPrompt(context: PrefetchedContext): string {
+/**
+ * Builds the user prompt for the initial commit-generation request.
+ *
+ * Wraps the pre-fetched changed-files list and diffs in XML-style tags
+ * for the model.
+ *
+ * @param context - Pre-fetched git context.
+ * @returns The complete user-prompt string.
+ */
+export function buildUserPrompt(context: PrefetchedContext): string {
   return [
     "<changed_files>",
     context.formatted.files,
@@ -138,7 +223,19 @@ function buildUserPrompt(context: PrefetchedContext): string {
   ].join("\n");
 }
 
-function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
+/**
+ * Builds the user prompt for a revision (replan) request.
+ *
+ * Includes the original context, the previous commit plan, and the
+ * user's feedback so the model can refine the plan.
+ *
+ * @param context - Pre-fetched git context.
+ * @param currentCommits - The previous commit plan the user wants to
+ *   change.
+ * @param feedback - The user's free-text revision feedback.
+ * @returns The complete refocus-prompt string.
+ */
+export function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEntry[], feedback: string): string {
   return [
     buildUserPrompt(context),
     "",
@@ -159,12 +256,25 @@ function buildRefocusPrompt(context: PrefetchedContext, currentCommits: CommitEn
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyStep = any;
 
-function truncate(s: string, max: number): string {
+export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max) + "…(truncated)";
 }
 
-function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void): ((step: AnyStep) => void) | undefined {
+/**
+ * Creates an on-step-finished callback that logs verbose agent traces.
+ *
+ * When ``verbose`` is ``true`` the returned callback prints the step
+ * counter, model text/output, reasoning, tool calls, tool results,
+ * finish reason, and token usage for every agent step.  When
+ * ``verbose`` is ``false`` the function returns ``undefined``
+ * (step logging is disabled).
+ *
+ * @param verbose - Whether verbose logging is enabled.
+ * @param setLabel - Callback to update the spinner / status label.
+ * @returns A step callback, or ``undefined`` if verbose is off.
+ */
+export function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void): ((step: AnyStep) => void) | undefined {
   if (!verbose) return undefined;
   let counter = 0;
   return (step: AnyStep) => {
@@ -200,7 +310,16 @@ function verboseStepLogger(verbose: boolean, setLabel: (label: string) => void):
   };
 }
 
-function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => void {
+/**
+ * Creates an on-step-finished callback for non-verbose (quiet) output.
+ *
+ * Updates the spinner label with the current tool name or a generic
+ * refining message so the user sees progress without the full trace.
+ *
+ * @param setLabel - Callback to update the spinner / status label.
+ * @returns A step callback.
+ */
+export function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => void {
   return (step: AnyStep) => {
     if (Array.isArray(step.toolCalls) && step.toolCalls.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -213,6 +332,20 @@ function quietStepLogger(setLabel: (label: string) => void): (step: AnyStep) => 
   };
 }
 
+/**
+ * Entry point for the commit-generation flow.
+ *
+ * Wraps {@link runInternal} with top-level error handling so unhandled
+ * rejections are caught, logged, and the process exits cleanly.
+ *
+ * @param opts - Optional configuration overrides.
+ * @param opts.modelOverride - Model name to use instead of the one in
+ *   config.
+ * @param opts.yes - If ``true``, auto-accept suggestions without
+ *   prompting.
+ * @param opts.verbose - If ``true``, stream full agent step traces to
+ *   stdout.
+ */
 export async function run(opts?: {
   modelOverride?: string;
   yes?: boolean;
@@ -227,6 +360,18 @@ export async function run(opts?: {
   }
 }
 
+/**
+ * Core execution logic for the commit-generation flow.
+ *
+ * Orchestrates config loading, API validation, git state pre-fetching,
+ * model invocation, output validation/repair, file-coverage checks,
+ * interactive revision, and final ``git add`` / ``git commit`` calls.
+ *
+ * @param opts - Optional configuration overrides.
+ * @param opts.modelOverride - Model name override.
+ * @param opts.yes - Skip the confirmation prompt.
+ * @param opts.verbose - Enable verbose step logging.
+ */
 async function runInternal(opts?: {
   modelOverride?: string;
   yes?: boolean;
@@ -502,16 +647,35 @@ async function runInternal(opts?: {
   console.log(`\n${D}Committed ${commits.length} commit(s).${Z}`);
 }
 
+/**
+ * Arguments for {@link runReplan}.
+ */
 interface RunReplanArgs {
+  /** Configured language model instance. */
   model: LanguageModel;
+  /** System prompt (including AGENTS.md if present). */
   systemContent: string;
+  /** Pre-fetched git context. */
   context: PrefetchedContext;
+  /** The commit plan before the user's feedback. */
   currentCommits: CommitEntry[];
+  /** User's free-text revision feedback. */
   feedback: string;
+  /** Optional step-finished callback for logging. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onStep: ((step: any) => void) | undefined;
 }
 
+/**
+ * Re-plans the commit list based on user feedback.
+ *
+ * Sends the current plan and feedback back to the model, requesting a
+ * revised plan. Includes format-repair logic on model failure.
+ *
+ * @param args - The re-plan parameters (see {@link RunReplanArgs}).
+ * @returns The revised commit entries.
+ * @throws {Error} If the model cannot produce a valid plan after retry.
+ */
 async function runReplan({
   model,
   systemContent,
@@ -570,13 +734,22 @@ async function runReplan({
   return result.experimental_output.commits as CommitEntry[];
 }
 
-function hasFileIssue(issue: FilesValidationIssue): boolean {
+export function hasFileIssue(issue: FilesValidationIssue): boolean {
   return issue.missingInCommits.length > 0 ||
     issue.extraInCommits.length > 0 ||
     issue.duplicateFiles.length > 0;
 }
 
-function logFileIssue(issue: FilesValidationIssue): void {
+/**
+ * Logs file-coverage validation issues to stderr.
+ *
+ * Reports missing files, extra (unchanged) files, and duplicated files
+ * with their commit indices.
+ *
+ * @param issue - The validation issue from
+ *   {@link validateFileCoverage}.
+ */
+export function logFileIssue(issue: FilesValidationIssue): void {
   if (issue.missingInCommits.length > 0) {
     console.error(`  - Missing files: ${issue.missingInCommits.join(", ")}`);
   }
