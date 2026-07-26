@@ -1,0 +1,20 @@
+README.md
+  s_73d40ea7425baf::t_4ee4dac0bdd4dd 120
+  s_73d40ea7425baf::t_a3b2a8b6b85dd4 117-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "69e386a8d3943a488df0888b3dcaf5dc8d238b38",
+  "prompts": {},
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
