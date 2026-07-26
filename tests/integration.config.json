@@ -3,10 +3,14 @@
   "scenario": "default",
   "models": [
     "big-pickle",
-    "nemotron-3-ultra-free",
     "deepseek-v4-flash-free",
-    "laguna-s-2.1-free"
+    "gpt-5-nano",
+    "laguna-s-2.1-free",
+    "ling-3.0-flash-free",
+    "mimo-v2.5-free",
+    "nemotron-3-ultra-free",
+    "north-mini-code-free"
   ],
-  "trialsPerModel": 20,
+  "trialsPerModel": 12,
   "spawnTimeoutMs": 120000
 }

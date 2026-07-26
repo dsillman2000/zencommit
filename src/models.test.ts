@@ -276,6 +276,14 @@ describe("fetchPricingMap", () => {
       models: {
         "big-pickle": { input: 0, output: 0 },
         "deepseek-v4-flash": { input: 0.14, output: 0.28 },
+        "model-00": { input: 0, output: 0 },
+        "model-01": { input: 1, output: 2 },
+        "model-02": { input: 2, output: 4 },
+        "model-03": { input: 3, output: 6 },
+        "model-04": { input: 4, output: 8 },
+        "model-05": { input: 5, output: 10 },
+        "model-06": { input: 6, output: 12 },
+        "model-07": { input: 7, output: 14 },
       },
     };
     await fsWriteFile(cachePath, JSON.stringify(cached), "utf-8");

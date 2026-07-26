@@ -59,7 +59,10 @@ async function saveCache(models: Record<string, Cost>): Promise<void> {
 }
 
 function isCacheFresh(cache: PricingCache): boolean {
-  return Date.now() - cache.timestamp < CACHE_TTL_MS;
+  const age = Date.now() - cache.timestamp;
+  if (age < 0) return false;
+  if (Object.keys(cache.models).length < 10) return false;
+  return age < CACHE_TTL_MS;
 }
 
 // ─── Fetchers ─────────────────────────────────────────────────────
