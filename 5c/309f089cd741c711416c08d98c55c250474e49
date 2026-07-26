@@ -1,0 +1,27 @@
+src/models.ts
+  s_b997d5bf909030::t_bd1fca30eccede 185-196,206
+  s_b997d5bf909030::t_124d38bce30057 36,39-45,70-79,84,107
+  s_b997d5bf909030::t_5a7aeb4a28d929 184
+src/models.test.ts
+  s_b997d5bf909030::t_ceaf1418d5a6ca 1-28,83-89,137-255,257-261,264-280,282-296,298-303,305-321,378-428,430-453
+  s_b997d5bf909030::t_1ca0f19fe6ea28 374-376
+  s_b997d5bf909030::t_b4a3a3fcc92898 322-373,377
+  s_b997d5bf909030::t_043c64c1e0f2aa 429
+  s_b997d5bf909030::t_cda7ba15bd8bde 256,262-263,281,297,304
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5c309f089cd741c711416c08d98c55c250474e49",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
