@@ -1,0 +1,11 @@
+{
+  "projectType": "node-project",
+  "scenario": "default",
+  "models": [
+    "big-pickle",
+    "north-mini-code-free",
+    "deepseek-v4-flash-free"
+  ],
+  "trialsPerModel": 10,
+  "spawnTimeoutMs": 120000
+}
