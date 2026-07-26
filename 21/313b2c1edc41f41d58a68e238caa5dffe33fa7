@@ -1,0 +1,30 @@
+tests/integration.config.json
+  s_b997d5bf909030::t_66ff9c47ba67f0 9
+  s_b997d5bf909030::t_33d1efdc3d2380 6
+tests/integration/robustness.integration.test.ts
+  s_b997d5bf909030::t_9007f9515e6a43 22-24,26-28,32-34
+tests/integration/stats-schema.ts
+  s_b997d5bf909030::t_47687817e968fa 38
+  s_b997d5bf909030::t_9a36125ba17d6f 66
+tests/integration/orchestrator.ts
+  s_b997d5bf909030::t_e6f36a84f9765b 98,100,102-111,113-116,118,120-123,125-126,128-129
+  s_b997d5bf909030::t_5d053b3a04e31b 99,101,112,117,119,124,127
+  s_b997d5bf909030::t_de8d28a7182169 183,203,210
+  s_b997d5bf909030::t_d597bf7b17aa64 145-149,191-194,205-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "21313b2c1edc41f41d58a68e238caa5dffe33fa7",
+  "prompts": {},
+  "sessions": {
+    "s_b997d5bf909030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0616814e5ffeHsVUdpbX3VPljm",
+        "model": "minimax-m3"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
