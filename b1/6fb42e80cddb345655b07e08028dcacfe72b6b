@@ -1,0 +1,26 @@
+package.json
+  s_73d40ea7425baf::t_eff077a59f0137 33
+package-lock.json
+  s_73d40ea7425baf::t_bfb68ce4514459 26,2081-2095,3206-3212,3546-3987,4037-4046,4715-4727,4787-4806,4877-4883,6742-6762
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b16fb42e80cddb345655b07e08028dcacfe72b6b",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  },
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
