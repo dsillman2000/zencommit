@@ -1,0 +1,19 @@
+.github/workflows/prompt-eval.yml
+  s_73d40ea7425baf::t_00867a3af1ea4d 50-51,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "484bd8e0d564c90b30df93bf389c66c5453a1365",
+  "prompts": {},
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
