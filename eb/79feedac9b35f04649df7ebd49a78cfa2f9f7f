@@ -1,0 +1,31 @@
+tests/integration.config.json
+  s_73d40ea7425baf::t_9fb42ee4110a22 9-15
+jest.config.js
+  s_73d40ea7425baf::t_213a2ffd17dafe 10
+tests/integration/orchestrator.ts
+  s_73d40ea7425baf::t_ffbb4cbcd2b527 157-161,168-173,177
+  s_73d40ea7425baf::t_9e339069a20ded 70-71,75-88
+  s_73d40ea7425baf::t_b08c129fab11d8 11-15,20
+jest.integration.config.js
+  s_73d40ea7425baf::t_f4560387d3d700 21
+tests/scripts/build-fixture.mjs
+  s_73d40ea7425baf::t_93d9deb511376e 3,12-17,19,58,82-96,98
+tests/integration/robustness.integration.test.ts
+  s_73d40ea7425baf::t_09409da1adbb9d 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "eb79feedac9b35f04649df7ebd49a78cfa2f9f7f",
+  "prompts": {},
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
