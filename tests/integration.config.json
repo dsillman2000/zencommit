@@ -2,8 +2,8 @@
   "models": [
     "big-pickle",
     "deepseek-v4-flash-free",
-    "gpt-5-nano",
-    "mimo-v2.5-free"
+    "mimo-v2.5-free",
+    "qwen3.5-plus"
   ],
   "trialsPerModel": 15,
   "spawnTimeoutMs": 120000,
