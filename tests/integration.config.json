@@ -3,7 +3,7 @@
     "big-pickle",
     "deepseek-v4-flash-free",
     "mimo-v2.5-free",
-    "qwen-3.5-plus"
+    "qwen3.5-plus"
   ],
   "trialsPerModel": 15,
   "spawnTimeoutMs": 120000,
