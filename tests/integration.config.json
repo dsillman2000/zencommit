@@ -1,6 +1,4 @@
 {
-  "projectType": "node-project",
-  "scenario": "default",
   "models": [
     "big-pickle",
     "deepseek-v4-flash-free",
@@ -8,5 +6,11 @@
     "mimo-v2.5-free"
   ],
   "trialsPerModel": 15,
-  "spawnTimeoutMs": 120000
+  "spawnTimeoutMs": 120000,
+  "scenarios": [
+    {
+      "id": "simple-math-ts/tests-subtractor",
+      "enabled": true
+    }
+  ]
 }

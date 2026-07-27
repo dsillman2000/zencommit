@@ -9,19 +9,13 @@ describe("zencommit integration", () => {
     return;
   }
 
-  it(
-    "runs robustness and performance benchmarks against real models",
-    async () => {
+  it("runs robustness and performance benchmarks against real models", async () => {
       const results = await runIntegration();
 
-      // Basic sanity: all trials ran and produced a report
       expect(results.trials.length).toBe(
         results.config.models.length * results.config.trialsPerModel,
       );
 
-      // Every trial either succeeded or has a recorded failure reason.
-      // Spawn timeouts produce exitCode=null, which is valid — we only
-      // assert exit code 0 when the process actually exited.
       for (const trial of results.trials) {
         if (trial.spawnExitCode !== null) {
           expect(trial.spawnExitCode).toBe(0);
@@ -35,16 +29,13 @@ describe("zencommit integration", () => {
         }
       }
 
-      // Summaries computed for each model
       expect(results.summaries.length).toBe(results.config.models.length);
       for (const s of results.summaries) {
         expect(s.trials).toBeGreaterThan(0);
-        // Robustness must be ≥ 0 and ≤ 1
         expect(s.robustness).toBeGreaterThanOrEqual(0);
         expect(s.robustness).toBeLessThanOrEqual(1);
       }
 
-      // Log summary data for human inspection
       console.table(
         results.summaries.map((s) => ({
           Model: s.model,
@@ -58,6 +49,5 @@ describe("zencommit integration", () => {
         })),
       );
     },
-    900_000,
   );
 });
