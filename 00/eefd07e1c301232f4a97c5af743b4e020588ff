@@ -1,0 +1,35 @@
+tests/fixtures/simple-math-ts/scenarios/tests-subtractor/src/multiplier.test.ts
+  s_73d40ea7425baf::t_2c2218bd34050f 1-8
+tests/fixtures/simple-math-ts/base/.gitignore
+  s_73d40ea7425baf::t_e3036f054ead42 1-2
+tests/fixtures/simple-math-ts/scenarios/tests-subtractor/src/subtractor.ts
+  s_73d40ea7425baf::t_78fcf33262de82 1-5
+tests/fixtures/simple-math-ts/scenarios/tests-subtractor/src/subtractor.test.ts
+  s_73d40ea7425baf::t_39526e41bebfcf 1-14
+tests/fixtures/simple-math-ts/base/README.md
+  s_73d40ea7425baf::t_b5900293877793 1-3
+tests/fixtures/simple-math-ts/scenarios/tests-subtractor/src/adder.test.ts
+  s_73d40ea7425baf::t_4b2baad059aae1 1-8
+tests/fixtures/simple-math-ts/base/package.json
+  s_73d40ea7425baf::t_1b606a194da9bd 1-6
+tests/fixtures/simple-math-ts/base/src/multiplier.ts
+  s_73d40ea7425baf::t_6456613b59fcd2 1-5
+tests/fixtures/simple-math-ts/base/src/adder.ts
+  s_73d40ea7425baf::t_2e89f537bb4a56 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "00eefd07e1c301232f4a97c5af743b4e020588ff",
+  "prompts": {},
+  "sessions": {
+    "s_73d40ea7425baf": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_060ffcd5afferUFExNrVn4iJ31",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
