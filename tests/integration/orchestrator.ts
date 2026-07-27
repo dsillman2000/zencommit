@@ -8,12 +8,16 @@ import { StatsReportSchema, type StatsReport } from "./stats-schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+interface ScenarioEntry {
+  id: string;
+  enabled: boolean;
+}
+
 interface IntegrationConfig {
-  projectType: string;
-  scenario: string;
   models: string[];
   trialsPerModel: number;
   spawnTimeoutMs: number;
+  scenarios: ScenarioEntry[];
 }
 
 interface TrialResult {
@@ -60,15 +64,28 @@ function readConfig(): IntegrationConfig {
   const configPath = resolve(projectRoot(), "tests", "integration.config.json");
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
   return {
-    projectType: raw.projectType ?? "node-project",
-    scenario: raw.scenario ?? "default",
     models: raw.models ?? [
       "big-pickle",
-      "north-mini-code-free",
       "deepseek-v4-flash-free",
+      "gpt-5-nano",
+      "mimo-v2.5-free",
     ],
     trialsPerModel: raw.trialsPerModel ?? 10,
     spawnTimeoutMs: raw.spawnTimeoutMs ?? 120_000,
+    scenarios: raw.scenarios ?? [],
+  };
+}
+
+interface ScenarioRef {
+  projectType: string;
+  scenarioName: string;
+}
+
+function parseScenarioId(id: string): ScenarioRef {
+  const parts = id.split("/");
+  return {
+    projectType: parts[0] ?? "unknown",
+    scenarioName: parts.slice(1).join("/"),
   };
 }
 
@@ -137,21 +154,27 @@ export async function runIntegration(): Promise<AggregatedResults> {
     );
   }
 
+  const enabledScenarios = config.scenarios.filter((s) => s.enabled);
+  if (enabledScenarios.length === 0) {
+    throw new Error("No enabled scenarios in integration.config.json");
+  }
+
   const trials: TrialResult[] = [];
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const totalTrials = config.models.length * config.trialsPerModel;
   let trialIndex = 0;
 
-  // Round-robin: iterate trial index in the outer loop, models in the inner
-  // loop. This interleaves models so no model is always first/last and
-  // server-side caching/warming effects are spread evenly across models.
   for (let t = 1; t <= config.trialsPerModel; t++) {
-    for (const model of config.models) {
+    for (let mi = 0; mi < config.models.length; mi++) {
+      const model = config.models[mi];
+      const si = (t + mi) % enabledScenarios.length;
+      const scenarioId = enabledScenarios[si].id;
+      const { projectType, scenarioName } = parseScenarioId(scenarioId);
+      const scenario = await loadScenario(projectType, scenarioName);
       trialIndex++;
-      const scenario = await loadScenario(config.projectType, config.scenario);
 
       process.stderr.write(
-        `  [${trialIndex}/${totalTrials}] ${model} trial ${t}/${config.trialsPerModel} … `,
+        `  [${trialIndex}/${totalTrials}] ${model} trial ${t}/${config.trialsPerModel} (${scenarioId}) … `,
       );
 
       const spawnStart = Date.now();

@@ -1,16 +1,16 @@
 {
-  "projectType": "node-project",
-  "scenario": "default",
   "models": [
     "big-pickle",
     "deepseek-v4-flash-free",
     "gpt-5-nano",
-    "laguna-s-2.1-free",
-    "ling-3.0-flash-free",
-    "mimo-v2.5-free",
-    "nemotron-3-ultra-free",
-    "north-mini-code-free"
+    "mimo-v2.5-free"
   ],
-  "trialsPerModel": 12,
-  "spawnTimeoutMs": 120000
+  "trialsPerModel": 15,
+  "spawnTimeoutMs": 120000,
+  "scenarios": [
+    {
+      "id": "simple-math-ts/tests-subtractor",
+      "enabled": true
+    }
+  ]
 }
