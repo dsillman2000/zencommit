@@ -517,18 +517,69 @@ describe("resolveModel", () => {
       .toThrow(CommitFlowError);
   });
 
-  it("returns the model name when both are present", () => {
+  it("returns the resolved model details when both are present", () => {
     const result = resolveModel({ key: "sk-123", model: "gpt-4" });
-    expect(result).toBe("gpt-4");
+    expect(result.modelName).toBe("gpt-4");
+    expect(result.variant).toBe("default");
   });
 
   it("returns the override when provided", () => {
     const result = resolveModel({ key: "sk-123", model: "gpt-4" }, "claude-3");
-    expect(result).toBe("claude-3");
+    expect(result.modelName).toBe("claude-3");
+    expect(result.variant).toBe("default");
   });
 
   it("throws when override is empty string (treated as no model)", () => {
     expect(() => resolveModel({ key: "sk-123", model: "gpt-4" }, ""))
+      .toThrow(CommitFlowError);
+  });
+
+  it("parses model variants when metadata is present", () => {
+    const metaMap = new Map([
+      [
+        "deepseek-v4-flash",
+        {
+          id: "deepseek-v4-flash",
+          name: "DeepSeek V4 Flash",
+          family: "deepseek-flash",
+          reasoning: true,
+          reasoningOptions: [{ type: "toggle" as const }, { type: "effort" as const, values: ["high", "max"] }],
+          variants: ["off", "high", "max"],
+          defaultVariant: "off",
+          cost: { input: 0.14, output: 0.28 },
+        },
+      ],
+    ]);
+
+    const defaultRes = resolveModel({ key: "sk-123", model: "deepseek-v4-flash" }, undefined, metaMap);
+    expect(defaultRes.modelName).toBe("deepseek-v4-flash");
+    expect(defaultRes.variant).toBe("off");
+    expect(defaultRes.providerOptions).toEqual({ thinking: { type: "disabled" } });
+
+    const highRes = resolveModel({ key: "sk-123", model: "deepseek-v4-flash:high" }, undefined, metaMap);
+    expect(highRes.modelName).toBe("deepseek-v4-flash");
+    expect(highRes.variant).toBe("high");
+    expect(highRes.providerOptions).toEqual({ thinking: { type: "enabled" }, reasoningEffort: "high" });
+  });
+
+  it("throws CommitFlowError on invalid variant", () => {
+    const metaMap = new Map([
+      [
+        "deepseek-v4-flash",
+        {
+          id: "deepseek-v4-flash",
+          name: "DeepSeek V4 Flash",
+          family: "deepseek-flash",
+          reasoning: true,
+          reasoningOptions: [{ type: "toggle" as const }],
+          variants: ["off", "on"],
+          defaultVariant: "off",
+          cost: { input: 0.14, output: 0.28 },
+        },
+      ],
+    ]);
+
+    expect(() => resolveModel({ key: "sk-123", model: "deepseek-v4-flash:invalid" }, undefined, metaMap))
       .toThrow(CommitFlowError);
   });
 });

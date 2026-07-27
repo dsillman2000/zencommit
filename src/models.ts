@@ -8,25 +8,56 @@ export interface ModelRow {
   modelId: string;
   inputPrice: string;
   outputPrice: string;
+  variants: string[];
+  defaultVariant?: string;
 }
 
-interface Cost {
+export interface Cost {
   input: number;
   output: number;
+  cacheRead?: number;
+  cacheWrite?: number;
 }
 
-interface PricingCache {
+export interface ReasoningOption {
+  type: "toggle" | "effort";
+  values?: string[];
+}
+
+export interface ModelMetadata {
+  id: string;
+  name: string;
+  family: string;
+  reasoning: boolean;
+  reasoningOptions: ReasoningOption[];
+  variants: string[];
+  defaultVariant?: string;
+  cost: Cost;
+}
+
+interface ModelCache {
   timestamp: number;
-  models: Record<string, Cost>;
+  models: Record<string, ModelMetadata>;
 }
 
 interface ApiModel {
   id: string;
 }
 
+interface ModelsDevCost {
+  input: number;
+  output: number;
+  cache_read?: number;
+  cache_write?: number;
+}
+
 interface ModelsDevModel {
   id: string;
-  cost?: Cost;
+  name?: string;
+  family?: string;
+  reasoning?: boolean;
+  reasoning_options?: ReasoningOption[];
+  cost?: ModelsDevCost;
 }
 
 // ─── Cache ────────────────────────────────────────────────────────
@@ -43,22 +74,50 @@ export function __setCacheFilePath(path: string): string {
   return prev;
 }
 
-async function loadCache(): Promise<PricingCache | null> {
+function isValidModelCache(cache: unknown): cache is ModelCache {
+  if (typeof cache !== "object" || cache === null) return false;
+  const c = cache as Record<string, unknown>;
+  if (typeof c.timestamp !== "number") return false;
+  if (typeof c.models !== "object" || c.models === null) return false;
+  const models = c.models as Record<string, unknown>;
+  if (Object.keys(models).length === 0) return false;
+  for (const meta of Object.values(models)) {
+    if (typeof meta !== "object" || meta === null) return false;
+    const m = meta as Record<string, unknown>;
+    if (typeof m.id !== "string") return false;
+    if (typeof m.family !== "string") return false;
+    if (typeof m.reasoning !== "boolean") return false;
+    if (!Array.isArray(m.reasoningOptions)) return false;
+    if (!Array.isArray(m.variants)) return false;
+    const cost = m.cost;
+    if (typeof cost !== "object" || cost === null) return false;
+    const co = cost as Record<string, unknown>;
+    if (typeof co.input !== "number") return false;
+    if (typeof co.output !== "number") return false;
+  }
+  return true;
+}
+
+async function loadCache(): Promise<ModelCache | null> {
   try {
     const raw = await readFile(cacheFilePath, "utf-8");
-    return JSON.parse(raw) as PricingCache;
+    const parsed = JSON.parse(raw) as unknown;
+    if (isValidModelCache(parsed)) {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-async function saveCache(models: Record<string, Cost>): Promise<void> {
-  const cache: PricingCache = { timestamp: Date.now(), models };
+async function saveCache(models: Record<string, ModelMetadata>): Promise<void> {
+  const cache: ModelCache = { timestamp: Date.now(), models };
   await mkdir(cacheDirPath, { recursive: true });
   await writeFile(cacheFilePath, JSON.stringify(cache));
 }
 
-function isCacheFresh(cache: PricingCache): boolean {
+function isCacheFresh(cache: ModelCache): boolean {
   const age = Date.now() - cache.timestamp;
   if (age < 0) return false;
   if (Object.keys(cache.models).length < 10) return false;
@@ -92,15 +151,61 @@ export async function fetchModelIds(): Promise<string[]> {
   return (body.data ?? []).map((m) => m.id);
 }
 
+/** Builds a flat list of variant names from models.dev reasoning_options. */
+export function buildVariantsFromOptions(
+  reasoningOptions: ReasoningOption[],
+): string[] {
+  if (reasoningOptions.length === 0) {
+    return ["default"];
+  }
+  const toggle = reasoningOptions.find((o) => o.type === "toggle");
+  const effort = reasoningOptions.find((o) => o.type === "effort");
+
+  if (toggle && effort) {
+    return ["off", ...(effort.values ?? [])];
+  }
+  if (effort) {
+    return effort.values ?? [];
+  }
+  if (toggle) {
+    return ["off", "on"];
+  }
+  return ["default"];
+}
+
+function extractModelMetadata(raw: ModelsDevModel): ModelMetadata | undefined {
+  if (!raw.cost) {
+    return undefined;
+  }
+  const reasoningOptions = raw.reasoning_options ?? [];
+  const variants = buildVariantsFromOptions(reasoningOptions);
+  return {
+    id: raw.id,
+    name: raw.name ?? raw.id,
+    family: raw.family ?? "",
+    reasoning: raw.reasoning ?? false,
+    reasoningOptions,
+    variants,
+    defaultVariant: variants[0],
+    cost: {
+      input: raw.cost.input,
+      output: raw.cost.output,
+      cacheRead: raw.cost.cache_read,
+      cacheWrite: raw.cost.cache_write,
+    },
+  };
+}
+
 /**
- * Fetches pricing data from models.dev and caches it locally.
+ * Fetches full model metadata (pricing + reasoning variants) from models.dev
+ * and caches it locally.
  *
  * Returns cached data if it is fresh (< 6 hours old).  When the cache
  * is stale or missing the full models.dev API is fetched and the
  * OpenCode Zen section is extracted.  If the network request fails
  * but stale cache exists, the stale cache is returned as a fallback.
  */
-export async function fetchPricingMap(): Promise<Map<string, Cost>> {
+export async function fetchModelMetadata(): Promise<Map<string, ModelMetadata>> {
   const cached = await loadCache();
   if (cached && isCacheFresh(cached)) {
     return new Map(Object.entries(cached.models));
@@ -117,21 +222,36 @@ export async function fetchPricingMap(): Promise<Map<string, Cost>> {
       throw new Error("opencode section not found in models.dev data");
     }
 
-    const costs: Record<string, Cost> = {};
+    const models: Record<string, ModelMetadata> = {};
     for (const [id, model] of Object.entries(opencodeModels)) {
-      if (model.cost) {
-        costs[id] = model.cost;
+      const meta = extractModelMetadata(model);
+      if (meta) {
+        models[id] = meta;
       }
     }
 
-    await saveCache(costs).catch(() => {});
-    return new Map(Object.entries(costs));
+    await saveCache(models).catch(() => {});
+    return new Map(Object.entries(models));
   } catch (err) {
     if (cached) {
       return new Map(Object.entries(cached.models));
     }
     throw err;
   }
+}
+
+/**
+ * Fetches pricing data from the shared model cache.
+ *
+ * Thin wrapper around {@link fetchModelMetadata} that returns only cost.
+ */
+export async function fetchPricingMap(): Promise<Map<string, Cost>> {
+  const metadata = await fetchModelMetadata();
+  const costs = new Map<string, Cost>();
+  for (const [id, meta] of metadata) {
+    costs.set(id, meta.cost);
+  }
+  return costs;
 }
 
 // ─── Pure helpers ─────────────────────────────────────────────────
@@ -143,41 +263,61 @@ function formatPrice(price: number): string {
 }
 
 /**
- * Joins model IDs from the Zen API with pricing from models.dev and
+ * Joins model IDs from the Zen API with metadata from models.dev and
  * returns rows sorted alphabetically by model ID.
  */
 export function buildModelsTable(
   modelIds: string[],
-  pricing: Map<string, Cost>,
+  metadata: Map<string, ModelMetadata>,
 ): ModelRow[] {
   const sorted = [...modelIds].sort();
   return sorted.map((id) => {
-    const cost = pricing.get(id);
+    const meta = metadata.get(id);
     return {
       modelId: id,
-      inputPrice: cost ? formatPrice(cost.input) : "\u2014",
-      outputPrice: cost ? formatPrice(cost.output) : "\u2014",
+      inputPrice: meta ? formatPrice(meta.cost.input) : "\u2014",
+      outputPrice: meta ? formatPrice(meta.cost.output) : "\u2014",
+      variants: meta?.variants ?? [],
+      defaultVariant: meta?.defaultVariant,
     };
   });
 }
 
 /**
  * Formats model rows into a compact, right-padded table string.
+ *
+ * The Variants column is rendered as one variant per line; the default
+ * variant is marked with " (default)".
  */
 export function formatTable(rows: ModelRow[]): string {
   if (rows.length === 0) return "(no models)";
 
   const idWidth = Math.max(...rows.map((r) => r.modelId.length), 9);
+  const priceWidth = 10;
   const headerId = "Model ID".padEnd(idWidth);
-  const sep = "\u2500".repeat(idWidth + 26);
+  const sep = "\u2500".repeat(idWidth + priceWidth * 2 + 28);
   const lines: string[] = [
-    `${headerId}  Input/1M    Output/1M`,
+    `${headerId}  ${"Input/1M".padStart(priceWidth)}  ${"Output/1M".padStart(priceWidth)}  Variants`,
     sep,
   ];
+
+  const variantPad = idWidth + priceWidth * 2 + 6;
+
   for (const r of rows) {
+    const firstVariant = r.variants[0];
+    const variantLabel = firstVariant
+      ? firstVariant === r.defaultVariant
+        ? `${firstVariant} (default)`
+        : firstVariant
+      : "\u2014";
     lines.push(
-      `${r.modelId.padEnd(idWidth)}  ${r.inputPrice.padStart(10)}  ${r.outputPrice.padStart(10)}`,
+      `${r.modelId.padEnd(idWidth)}  ${r.inputPrice.padStart(priceWidth)}  ${r.outputPrice.padStart(priceWidth)}  ${variantLabel}`,
     );
+    for (let i = 1; i < r.variants.length; i++) {
+      const v = r.variants[i];
+      const label = v === r.defaultVariant ? `${v} (default)` : v;
+      lines.push(`${" ".repeat(variantPad)}${label}`);
+    }
   }
   return lines.join("\n");
 }
@@ -186,25 +326,25 @@ export function formatTable(rows: ModelRow[]): string {
 
 /**
  * Builds the formatted table string for the given model list and
- * pricing map. Pure function — does no I/O — extracted so the output
+ * metadata map. Pure function — does no I/O — extracted so the output
  * formatting can be unit-tested in isolation.
  */
 export function printModelsList(
   modelIds: string[],
-  pricing: Map<string, Cost>,
+  metadata: Map<string, ModelMetadata>,
 ): string {
-  const rows = buildModelsTable(modelIds, pricing);
+  const rows = buildModelsTable(modelIds, metadata);
   return formatTable(rows);
 }
 
 /**
- * Fetches the current OpenCode Zen model list and pricing, then
+ * Fetches the current OpenCode Zen model list and metadata, then
  * prints a compact table to stdout.
  */
 export async function listModels(): Promise<void> {
-  const [modelIds, pricing] = await Promise.all([
+  const [modelIds, metadata] = await Promise.all([
     fetchModelIds(),
-    fetchPricingMap(),
+    fetchModelMetadata(),
   ]);
-  console.log(printModelsList(modelIds, pricing));
+  console.log(printModelsList(modelIds, metadata));
 }

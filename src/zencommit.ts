@@ -16,6 +16,16 @@ import { z } from "zod";
 import { createInterface, type Interface } from "node:readline/promises";
 import { simpleGit, type SimpleGit } from "simple-git";
 import { readConfig } from "./config.js";
+import {
+  fetchModelMetadata,
+  type ModelMetadata,
+} from "./models.js";
+import {
+  parseModelVariant,
+  buildProviderOptions,
+  formatVariants,
+  getDefaultVariant,
+} from "./model-options.js";
 import { tools } from "./tools/index.js";
 import {
   SYSTEM_PROMPT,
@@ -370,24 +380,51 @@ type AnyStep = any;
 export type AnyStepCallback = ((step: any) => void) | undefined;
 
 /**
- * Validates the API key and model name in config.
- *
- * @returns The resolved model name.
- * @throws {CommitFlowError} If key or model is missing.
+ * Resolved model selection including the variant to use and the provider
+ * options that control the model's reasoning/thinking mode.
  */
-export function resolveModel(config: { key?: string; model?: string }, modelOverride?: string): string {
+export interface ResolvedModel {
+  /** Base model ID passed to the provider. */
+  modelName: string;
+  /** Variant selected for the model (defaults to the lowest/no-thinking variant). */
+  variant: string;
+  /** Provider-specific options for `generateText` (`providerOptions.zen`). */
+  providerOptions?: Record<string, unknown>;
+}
+
+/**
+ * Validates the API key and model name in config, parses an optional
+ * `:variant` suffix, and selects the default reasoning variant.
+ *
+ * @returns The resolved model name, variant, and provider options.
+ * @throws {CommitFlowError} If key or model is missing, or if the variant is invalid.
+ */
+export function resolveModel(
+  config: { key?: string; model?: string },
+  modelOverride?: string,
+  modelMetadata?: Map<string, ModelMetadata>,
+): ResolvedModel {
   if (!config.key) {
     throw new CommitFlowError(
       "API key not configured.\nRun: zencommit config set key <your-openode-zen-api-key>",
     );
   }
-  const model = modelOverride ?? config.model;
-  if (!model) {
+  const rawModel = modelOverride ?? config.model;
+  if (!rawModel) {
     throw new CommitFlowError(
       "Model not configured.\nRun: zencommit config set model <model-name>",
     );
   }
-  return model;
+  const { baseModel, variant: requestedVariant } = parseModelVariant(rawModel);
+  const metadata = modelMetadata?.get(baseModel);
+  const variant = requestedVariant ?? getDefaultVariant(metadata) ?? "default";
+  if (metadata && !metadata.variants.includes(variant)) {
+    throw new CommitFlowError(
+      `Invalid variant '${variant}' for model '${baseModel}'. Available: ${formatVariants(metadata)}`,
+    );
+  }
+  const providerOptions = buildProviderOptions(metadata, variant);
+  return { modelName: baseModel, variant, providerOptions };
 }
 
 /**
@@ -440,6 +477,7 @@ export interface GenerateInitialPlanArgs {
   onStep?: AnyStepCallback;
   onLabel?: (label: string) => void;
   logger: Logger;
+  providerOptions?: Record<string, unknown>;
 }
 
 /**
@@ -462,6 +500,7 @@ export async function generateInitialPlan(args: GenerateInitialPlanArgs): Promis
       maxSteps: 3,
       maxRetries: 4,
       experimental_output: Output.object({ schema: commitSchema }),
+      providerOptions: args.providerOptions ? ({ zen: args.providerOptions } as never) : undefined,
       onStepFinish: args.onStep,
     });
   } catch (err) {
@@ -491,6 +530,7 @@ export async function generateInitialPlan(args: GenerateInitialPlanArgs): Promis
             maxSteps: 1,
             maxRetries: 4,
             experimental_output: Output.object({ schema: commitSchema }),
+      providerOptions: args.providerOptions ? ({ zen: args.providerOptions } as never) : undefined,
             onStepFinish: args.onStep,
           });
         } catch (retryErr) {
@@ -522,6 +562,7 @@ export interface FixFileCoverageArgs {
   onStep?: AnyStepCallback;
   onLabel?: (label: string) => void;
   logger: Logger;
+  providerOptions?: Record<string, unknown>;
 }
 
 /**
@@ -556,6 +597,7 @@ export async function fixFileCoverage(args: FixFileCoverageArgs): Promise<Commit
         maxSteps: 1,
         maxRetries: 4,
         experimental_output: Output.object({ schema: commitSchema }),
+        providerOptions: args.providerOptions ? ({ zen: args.providerOptions } as never) : undefined,
         onStepFinish: args.onStep,
       });
       if (retryResult.experimental_output) {
@@ -669,7 +711,7 @@ export function buildAskAndReplan(
   model: LanguageModel,
   systemContent: string,
   context: PrefetchedContext,
-  opts: { verbose?: boolean; promptOverride?: string },
+  opts: { verbose?: boolean; promptOverride?: string; providerOptions?: Record<string, unknown> },
   onStep: AnyStepCallback,
   setLabel: (label: string) => void,
   logger: Logger,
@@ -700,6 +742,7 @@ export function buildAskAndReplan(
           feedback: trimmed,
           onStep: iterOnStep,
           promptOverride: opts.promptOverride,
+          providerOptions: opts.providerOptions,
         });
         return { action: "revise", revisedCommits };
       } finally {
@@ -766,7 +809,8 @@ async function runInternal(opts?: {
   promptOverride?: string;
 }): Promise<void> {
   const config = await readConfig();
-  const modelName = resolveModel(config, opts?.modelOverride);
+  const modelMetadata = await fetchModelMetadata().catch(() => undefined);
+  const resolved = resolveModel(config, opts?.modelOverride, modelMetadata);
 
   const status = await git.status();
   if (!hasChanges(status)) {
@@ -786,7 +830,7 @@ async function runInternal(opts?: {
     baseURL: "https://opencode.ai/zen/v1",
     apiKey: config.key,
   });
-  const model: LanguageModel = provider(modelName);
+  const model: LanguageModel = provider(resolved.modelName);
 
   const spinner: SpinnerHandle | null = opts?.verbose ? null : startSpinner("Analyzing changes…");
   const setLabel = (label: string) => spinner?.update(label);
@@ -808,6 +852,7 @@ async function runInternal(opts?: {
     onStep,
     onLabel: setLabel,
     logger: console,
+    providerOptions: resolved.providerOptions,
   });
 
   commits = await fixFileCoverage({
@@ -820,6 +865,7 @@ async function runInternal(opts?: {
     onStep,
     onLabel: setLabel,
     logger: console,
+    providerOptions: resolved.providerOptions,
   });
 
   stopSpinner();
@@ -841,7 +887,20 @@ async function runInternal(opts?: {
     const { commits: finalCommits, aborted, revisionCount } = await runInteractiveLoop(
       commits,
       { yes: !!opts?.yes },
-      buildAskAndReplan(rl, model, systemContent, context, { verbose: opts?.verbose, promptOverride: opts?.promptOverride }, onStep, setLabel, console),
+      buildAskAndReplan(
+        rl,
+        model,
+        systemContent,
+        context,
+        {
+          verbose: opts?.verbose,
+          promptOverride: opts?.promptOverride,
+          providerOptions: resolved.providerOptions,
+        },
+        onStep,
+        setLabel,
+        console,
+      ),
     );
 
     if (aborted) {
@@ -878,6 +937,8 @@ export interface RunReplanArgs {
   onStep: AnyStepCallback;
   /** Custom user instruction prepended to the prompt. */
   promptOverride?: string;
+  /** Provider-specific options (`providerOptions.zen`). */
+  providerOptions?: Record<string, unknown>;
 }
 
 /**
@@ -898,6 +959,7 @@ export async function runReplan({
   feedback,
   onStep,
   promptOverride,
+  providerOptions,
 }: RunReplanArgs): Promise<CommitEntry[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let result: any;
@@ -909,6 +971,7 @@ export async function runReplan({
       tools: {},
       maxSteps: 1,
       experimental_output: Output.object({ schema: commitSchema }),
+      providerOptions: providerOptions ? ({ zen: providerOptions } as never) : undefined,
       onStepFinish: onStep,
     });
   } catch (err) {
@@ -933,6 +996,7 @@ export async function runReplan({
         tools: {},
         maxSteps: 1,
         experimental_output: Output.object({ schema: commitSchema }),
+      providerOptions: providerOptions ? ({ zen: providerOptions } as never) : undefined,
         onStepFinish: onStep,
       });
       if (!retryResult.experimental_output) {
@@ -1152,14 +1216,15 @@ export async function runStats(opts?: {
 }): Promise<void> {
   try {
     const config = await readConfig();
-    const modelName = resolveModel(config, opts?.modelOverride);
+    const modelMetadata = await fetchModelMetadata().catch(() => undefined);
+    const resolved = resolveModel(config, opts?.modelOverride, modelMetadata);
 
     const status = await git.status();
     if (!hasChanges(status)) {
       console.log(JSON.stringify({
         schemaVersion: 1,
         ok: false,
-        model: modelName,
+        model: resolved.modelName,
         generatedAt: new Date().toISOString(),
         workdir: cwd,
         context: null,
@@ -1182,7 +1247,7 @@ export async function runStats(opts?: {
       apiKey: config.key,
     });
 
-    const model: LanguageModel = provider(modelName);
+    const model: LanguageModel = provider(resolved.modelName);
     const collector = new StatsCollector();
     const prevFn = __setGenerateText(collector.wrap(generateTextFn));
 
@@ -1199,6 +1264,7 @@ export async function runStats(opts?: {
         onStep: undefined,
         onLabel: () => {},
         logger: { log() {}, error() {} },
+        providerOptions: resolved.providerOptions,
       });
 
       if (collector.calls.length > 1) {
@@ -1216,6 +1282,7 @@ export async function runStats(opts?: {
         onStep: undefined,
         onLabel: () => {},
         logger: { log() {}, error() {} },
+        providerOptions: resolved.providerOptions,
       });
 
       if (collector.calls.length > 1 + formatRepairs) {
@@ -1227,7 +1294,7 @@ export async function runStats(opts?: {
       console.log(JSON.stringify({
         schemaVersion: 1,
         ok: true,
-        model: modelName,
+        model: resolved.modelName,
         generatedAt: new Date().toISOString(),
         workdir: cwd,
         context: {
@@ -1264,7 +1331,7 @@ export async function runStats(opts?: {
       console.log(JSON.stringify({
         schemaVersion: 1,
         ok: false,
-        model: modelName,
+        model: resolved.modelName,
         generatedAt: new Date().toISOString(),
         workdir: cwd,
         context: {
