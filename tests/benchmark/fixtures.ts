@@ -23,23 +23,20 @@ export interface Scenario {
 }
 
 /**
- * Loads a scenario tarball into a temporary directory.
+ * Loads a built scenario tarball into a temporary directory.
  *
  * The returned directory is a fully functional git repo with the desired
  * working-tree state already applied.
  *
- * @param projectType - e.g. ``"node-project"``
- * @param scenarioName - e.g. ``"default"``
+ * @param scenarioName - e.g. ``"tests-subtractor"``
  */
 export async function loadScenario(
-  projectType: string,
   scenarioName: string,
 ): Promise<Scenario> {
   const tarball = join(
     fixturesDir(),
-    projectType,
-    "scenarios",
-    `${scenarioName}.tar.gz`,
+    scenarioName,
+    "scenario.tar.gz",
   );
 
   if (!existsSync(tarball)) {

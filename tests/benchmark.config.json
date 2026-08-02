@@ -9,7 +9,7 @@
   "spawnTimeoutMs": 120000,
   "scenarios": [
     {
-      "id": "simple-math-ts/tests-subtractor",
+      "name": "simple-math-subtractor-ts",
       "enabled": true
     }
   ]
