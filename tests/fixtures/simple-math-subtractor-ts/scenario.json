@@ -1,1 +1,3 @@
-{"prompt": ""}
+{
+  "prompt": "Split into exactly two commits: one for the implementation (subtractor.ts) and one for the tests (the three test files)."
+}

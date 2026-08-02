@@ -1,0 +1,389 @@
+diff --git a/src/__tests__/index.test.ts b/src/__tests__/index.test.ts
+new file mode 100644
+index 0000000..dae71fd
+--- /dev/null
++++ b/src/__tests__/index.test.ts
+@@ -0,0 +1,37 @@
++import { AuthStore, ApiServer, createApp } from "../index.js";
++
++const assert = (cond: unknown, msg: string): void => {
++  if (!cond) throw new Error(`assertion failed: ${msg}`);
++};
++
++const test = (name: string, fn: () => void): void => {
++  try {
++    fn();
++    console.log(`  ok ${name}`);
++  } catch (e) {
++    console.error(`  FAIL ${name}: ${(e as Error).message}`);
++    process.exitCode = 1;
++  }
++};
++
++test('createApp wires auth and api', () => {
++  const { auth, api } = createApp();
++  assert(auth instanceof AuthStore, 'auth is AuthStore');
++  assert(api instanceof ApiServer, 'api is ApiServer');
++});
++
++test('auth register/login context', () => {
++  const auth = new AuthStore();
++  const u = auth.register({ name: 'A', email: 'a@example.com', role: 'admin' });
++  auth.login(u.id);
++  const ctx = auth.context(u.id);
++  assert(ctx.user?.id === u.id, 'user present');
++  assert(ctx.session !== null, 'session present');
++});
++
++test('api create requires editor or admin', () => {
++  const { auth, api } = createApp();
++  const editor = auth.register({ name: 'E', email: 'e@example.com', role: 'editor' });
++  const r = api.create({ ownerId: editor.id, name: 'Doc', body: 'hi' });
++  assert(r.name === 'Doc', 'doc created');
++});
+diff --git a/src/api.ts b/src/api.ts
+new file mode 100644
+index 0000000..215c4c9
+--- /dev/null
++++ b/src/api.ts
+@@ -0,0 +1,48 @@
++import { slugify } from "./utils.js";
++import type { AuthStore } from "./auth.js";
++import type { Resource, UserId } from "./types.js";
++
++export class ApiServer {
++  private resources = new Map<string, Resource>();
++  constructor(private auth: AuthStore) {}
++
++  list(ownerId?: UserId): Resource[] {
++    const all = Array.from(this.resources.values());
++    return ownerId ? all.filter(r => r.ownerId === ownerId) : all;
++  }
++
++  get(id: string): Resource | null {
++    return this.resources.get(id) ?? null;
++  }
++
++  create(input: { ownerId: UserId; name: string; body: string }): Resource {
++    const ctx = this.auth.context(input.ownerId);
++    if (!ctx.user) throw new Error('unauthenticated');
++    if (!this.auth.hasRole(input.ownerId, 'admin') && !this.auth.hasRole(input.ownerId, 'editor')) {
++      throw new Error('forbidden');
++    }
++    const r: Resource = {
++      id: slugify(input.name) + '-' + Math.random().toString(36).slice(2, 8),
++      ownerId: input.ownerId,
++      name: input.name,
++      body: input.body,
++    };
++    this.resources.set(r.id, r);
++    return r;
++  }
++
++  update(id: string, patch: Partial<Pick<Resource, 'name' | 'body'>>): Resource {
++    const r = this.resources.get(id);
++    if (!r) throw new Error('not found');
++    if (patch.name) r.name = patch.name;
++    if (patch.body) r.body = patch.body;
++    return r;
++  }
++
++  remove(id: string, by: UserId): void {
++    const r = this.resources.get(id);
++    if (!r) throw new Error('not found');
++    if (r.ownerId !== by && !this.auth.hasRole(by, 'admin')) throw new Error('forbidden');
++    this.resources.delete(id);
++  }
++}
+diff --git a/src/auth.ts b/src/auth.ts
+new file mode 100644
+index 0000000..fb6947b
+--- /dev/null
++++ b/src/auth.ts
+@@ -0,0 +1,45 @@
++import { now } from "./utils.js";
++import type { Role, Session, User, UserId } from "./types.js";
++
++export interface AuthContext {
++  session: Session | null;
++  user: User | null;
++}
++
++export class AuthStore {
++  private sessions = new Map<UserId, Session>();
++  private users = new Map<UserId, User>();
++
++  register(u: Omit<User, 'id' | 'createdAt'> & { id?: UserId }): User {
++    const id = u.id ?? crypto.randomUUID();
++    const user: User = { id, name: u.name, email: u.email, role: u.role, createdAt: now() };
++    this.users.set(id, user);
++    return user;
++  }
++
++  login(userId: UserId, durationMs = 60 * 60 * 1000): Session {
++    const u = this.users.get(userId);
++    if (!u) throw new Error('user not found');
++    const session: Session = { userId, startedAt: now(), expiresAt: new Date(Date.now() + durationMs) };
++    this.sessions.set(userId, session);
++    return session;
++  }
++
++  logout(userId: UserId): void {
++    this.sessions.delete(userId);
++  }
++
++  context(userId: UserId): AuthContext {
++    const session = this.sessions.get(userId) ?? null;
++    if (session && session.expiresAt < now()) {
++      this.sessions.delete(userId);
++      return { session: null, user: null };
++    }
++    return { session, user: this.users.get(userId) ?? null };
++  }
++
++  hasRole(userId: UserId, role: Role): boolean {
++    const u = this.users.get(userId);
++    return !!u && u.role === role;
++  }
++}
+diff --git a/src/index.ts b/src/index.ts
+index 514c35e..8e0648f 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,161 +1,10 @@
+-// Application entry point - all logic in a single file.
++import { ApiServer } from "./api.js";
++import { AuthStore } from "./auth.js";
+ 
+-// ─── types ──────────────────────────────────────────────────────
+-
+-export type UserId = string;
+-export type Role = 'admin' | 'editor' | 'viewer';
+-
+-export interface User {
+-  id: UserId;
+-  name: string;
+-  email: string;
+-  role: Role;
+-  createdAt: Date;
+-}
+-
+-export interface Resource {
+-  id: string;
+-  ownerId: UserId;
+-  name: string;
+-  body: string;
+-}
+-
+-export interface Session {
+-  userId: UserId;
+-  startedAt: Date;
+-  expiresAt: Date;
+-}
+-
+-// ─── utils ──────────────────────────────────────────────────────
+-
+-export function now(): Date {
+-  return new Date();
+-}
+-
+-export function iso(d: Date): string {
+-  return d.toISOString();
+-}
+-
+-export function parseIso(s: string): Date {
+-  return new Date(s);
+-}
+-
+-export function clamp(n: number, lo: number, hi: number): number {
+-  return Math.max(lo, Math.min(hi, n));
+-}
+-
+-export function slugify(s: string): string {
+-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+-}
+-
+-export function uniq<T>(arr: T[]): T[] {
+-  return Array.from(new Set(arr));
+-}
+-
+-export function groupBy<K, V>(arr: V[], key: (v: V) => K): Map<K, V[]> {
+-  const m = new Map<K, V[]>();
+-  for (const v of arr) {
+-    const k = key(v);
+-    const list = m.get(k) ?? [];
+-    list.push(v);
+-    m.set(k, list);
+-  }
+-  return m;
+-}
+-
+-// ─── auth ───────────────────────────────────────────────────────
+-
+-export interface AuthContext {
+-  session: Session | null;
+-  user: User | null;
+-}
+-
+-export class AuthStore {
+-  private sessions = new Map<UserId, Session>();
+-  private users = new Map<UserId, User>();
+-
+-  register(u: Omit<User, 'id' | 'createdAt'> & { id?: UserId }): User {
+-    const id = u.id ?? crypto.randomUUID();
+-    const user: User = { id, name: u.name, email: u.email, role: u.role, createdAt: now() };
+-    this.users.set(id, user);
+-    return user;
+-  }
+-
+-  login(userId: UserId, durationMs = 60 * 60 * 1000): Session {
+-    const u = this.users.get(userId);
+-    if (!u) throw new Error('user not found');
+-    const session: Session = { userId, startedAt: now(), expiresAt: new Date(Date.now() + durationMs) };
+-    this.sessions.set(userId, session);
+-    return session;
+-  }
+-
+-  logout(userId: UserId): void {
+-    this.sessions.delete(userId);
+-  }
+-
+-  context(userId: UserId): AuthContext {
+-    const session = this.sessions.get(userId) ?? null;
+-    if (session && session.expiresAt < now()) {
+-      this.sessions.delete(userId);
+-      return { session: null, user: null };
+-    }
+-    return { session, user: this.users.get(userId) ?? null };
+-  }
+-
+-  hasRole(userId: UserId, role: Role): boolean {
+-    const u = this.users.get(userId);
+-    return !!u && u.role === role;
+-  }
+-}
+-
+-// ─── api ────────────────────────────────────────────────────────
+-
+-export class ApiServer {
+-  private resources = new Map<string, Resource>();
+-  constructor(private auth: AuthStore) {}
+-
+-  list(ownerId?: UserId): Resource[] {
+-    const all = Array.from(this.resources.values());
+-    return ownerId ? all.filter(r => r.ownerId === ownerId) : all;
+-  }
+-
+-  get(id: string): Resource | null {
+-    return this.resources.get(id) ?? null;
+-  }
+-
+-  create(input: { ownerId: UserId; name: string; body: string }): Resource {
+-    const ctx = this.auth.context(input.ownerId);
+-    if (!ctx.user) throw new Error('unauthenticated');
+-    if (!this.auth.hasRole(input.ownerId, 'admin') && !this.auth.hasRole(input.ownerId, 'editor')) {
+-      throw new Error('forbidden');
+-    }
+-    const r: Resource = {
+-      id: slugify(input.name) + '-' + Math.random().toString(36).slice(2, 8),
+-      ownerId: input.ownerId,
+-      name: input.name,
+-      body: input.body,
+-    };
+-    this.resources.set(r.id, r);
+-    return r;
+-  }
+-
+-  update(id: string, patch: Partial<Pick<Resource, 'name' | 'body'>>): Resource {
+-    const r = this.resources.get(id);
+-    if (!r) throw new Error('not found');
+-    if (patch.name) r.name = patch.name;
+-    if (patch.body) r.body = patch.body;
+-    return r;
+-  }
+-
+-  remove(id: string, by: UserId): void {
+-    const r = this.resources.get(id);
+-    if (!r) throw new Error('not found');
+-    if (r.ownerId !== by && !this.auth.hasRole(by, 'admin')) throw new Error('forbidden');
+-    this.resources.delete(id);
+-  }
+-}
+-
+-// ─── main ───────────────────────────────────────────────────────
++export * from "./types.js";
++export * from "./utils.js";
++export * from "./auth.js";
++export * from "./api.js";
+ 
+ export function createApp() {
+   const auth = new AuthStore();
+diff --git a/src/types.ts b/src/types.ts
+new file mode 100644
+index 0000000..6647a1f
+--- /dev/null
++++ b/src/types.ts
+@@ -0,0 +1,23 @@
++export type UserId = string;
++export type Role = 'admin' | 'editor' | 'viewer';
++
++export interface User {
++  id: UserId;
++  name: string;
++  email: string;
++  role: Role;
++  createdAt: Date;
++}
++
++export interface Resource {
++  id: string;
++  ownerId: UserId;
++  name: string;
++  body: string;
++}
++
++export interface Session {
++  userId: UserId;
++  startedAt: Date;
++  expiresAt: Date;
++}
+diff --git a/src/utils.ts b/src/utils.ts
+new file mode 100644
+index 0000000..109e11b
+--- /dev/null
++++ b/src/utils.ts
+@@ -0,0 +1,34 @@
++export function now(): Date {
++  return new Date();
++}
++
++export function iso(d: Date): string {
++  return d.toISOString();
++}
++
++export function parseIso(s: string): Date {
++  return new Date(s);
++}
++
++export function clamp(n: number, lo: number, hi: number): number {
++  return Math.max(lo, Math.min(hi, n));
++}
++
++export function slugify(s: string): string {
++  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
++}
++
++export function uniq<T>(arr: T[]): T[] {
++  return Array.from(new Set(arr));
++}
++
++export function groupBy<K, V>(arr: V[], key: (v: V) => K): Map<K, V[]> {
++  const m = new Map<K, V[]>();
++  for (const v of arr) {
++    const k = key(v);
++    const list = m.get(k) ?? [];
++    list.push(v);
++    m.set(k, list);
++  }
++  return m;
++}

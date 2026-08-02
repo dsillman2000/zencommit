@@ -1,0 +1,45 @@
+diff --git a/README.md b/README.md
+index 46d4609..d4e7f08 100644
+--- a/README.md
++++ b/README.md
+@@ -1,9 +1,9 @@
+-# oldname
++# newname
+ 
+-Tiny CLI tool called `oldname`.
++Tiny CLI tool called `newname`.
+ 
+ ## Build
+ 
+ ```
+-go build ./cmd/oldname
++go build ./cmd/newname
+ ```
+diff --git a/cmd/oldname/main.go b/cmd/newname/main.go
+similarity index 71%
+rename from cmd/oldname/main.go
+rename to cmd/newname/main.go
+index 4804d71..bbd1064 100644
+--- a/cmd/oldname/main.go
++++ b/cmd/newname/main.go
+@@ -1,9 +1,9 @@
+-package oldname
++package newname
+ 
+ import (
+ 	"fmt"
+ 
+-	"example.com/oldname/internal"
++	"example.com/newname/internal"
+ )
+ 
+ func main() {
+diff --git a/go.mod b/go.mod
+index d784ec8..f72312d 100644
+--- a/go.mod
++++ b/go.mod
+@@ -1,3 +1,3 @@
+-module example.com/oldname
++module example.com/newname
+ 
+ go 1.22

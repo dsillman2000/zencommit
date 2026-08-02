@@ -1,0 +1,65 @@
+diff --git a/README.md b/README.md
+index c0c9bea..776b83c 100644
+--- a/README.md
++++ b/README.md
+@@ -9,3 +9,7 @@ from math_ops import add, subtract
+ add(2, 3)       # 5
+ subtract(5, 2)  # 3
+ ```
++
++## Testing
++
++Run `pytest` from the project root.
+diff --git a/tests/conftest.py b/tests/conftest.py
+new file mode 100644
+index 0000000..9e76f69
+--- /dev/null
++++ b/tests/conftest.py
+@@ -0,0 +1,7 @@
++import pytest
++
++
++@pytest.fixture
++def base_numbers() -> tuple[int, int]:
++    """Provide a reusable pair of integers for tests."""
++    return (5, 3)
+diff --git a/tests/test_add.py b/tests/test_add.py
+new file mode 100644
+index 0000000..9b24c93
+--- /dev/null
++++ b/tests/test_add.py
+@@ -0,0 +1,14 @@
++from src.math_ops import add
++
++
++def test_add_positive():
++    assert add(2, 3) == 5
++
++
++def test_add_zero():
++    assert add(0, 0) == 0
++
++
++def test_add_with_fixture(base_numbers):
++    a, b = base_numbers
++    assert add(a, b) == 8
+diff --git a/tests/test_subtract.py b/tests/test_subtract.py
+new file mode 100644
+index 0000000..6cb7d43
+--- /dev/null
++++ b/tests/test_subtract.py
+@@ -0,0 +1,14 @@
++from src.math_ops import subtract
++
++
++def test_subtract_positive():
++    assert subtract(5, 3) == 2
++
++
++def test_subtract_zero():
++    assert subtract(7, 7) == 0
++
++
++def test_subtract_with_fixture(base_numbers):
++    a, b = base_numbers
++    assert subtract(a, b) == 2

@@ -5,11 +5,31 @@
     "mimo-v2.5-free",
     "qwen3.5-plus"
   ],
-  "trialsPerModel": 15,
+  "trialsPerModel": 18,
   "spawnTimeoutMs": 120000,
   "scenarios": [
     {
       "name": "simple-math-subtractor-ts",
+      "enabled": true
+    },
+    {
+      "name": "python-pytest-fixtures",
+      "enabled": true
+    },
+    {
+      "name": "go-cli-rename",
+      "enabled": true
+    },
+    {
+      "name": "rust-cargo-feature",
+      "enabled": true
+    },
+    {
+      "name": "ts-large-split-refactor",
+      "enabled": true
+    },
+    {
+      "name": "docs-typo-fix",
       "enabled": true
     }
   ]
