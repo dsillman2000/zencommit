@@ -1,0 +1,19 @@
+tests/scripts/build-fixture.mjs
+  s_590e0bae456cc9::t_df93d8a50a97be 3,12-18,20-30,35-36,38,45-47,51-52,55,70-71,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7bda62f96da5a9e1fde64ca1542f919119e16ab5",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
