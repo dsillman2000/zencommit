@@ -462,7 +462,7 @@ function main(): void {
   const lines: string[] = [
     "## Prompt Evaluation",
     "",
-    `**SHA:** \`${sha}\` · **Baseline:** ${baselineLabel} · **${scenarioLabel} · **${trialsPerModel} trials/model**`,
+    `**SHA:** \`${sha}\` · **Baseline:** ${baselineLabel} · **${scenarioLabel} · ${trialsPerModel} trials/model**`,
     "",
     "| Model | Success | Wall p50 / p95 | Tokens p50 / p95 | Δ Rate | Δ Wall | Δ Tokens |",
     "|-------|:-------:|:--------------:|:----------------:|:------:|:------:|:--------:|",
