@@ -1,0 +1,63 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index bad1647..6b089d9 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -5,3 +5,6 @@ edition = "2021"
+ 
+ [lib]
+ path = "src/lib.rs"
++
++[dependencies]
++serde = "1"
+diff --git a/src/lib.rs b/src/lib.rs
+index b4a2a9e..38a4676 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,3 +1,24 @@
++use serde::{Deserialize, Serialize};
++
++#[derive(Debug, PartialEq, Serialize, Deserialize)]
++pub enum Op {
++    Add,
++    Mul,
++    Div,
++}
++
+ pub fn add(a: i32, b: i32) -> i32 {
+     a + b
+ }
++
++pub fn mul(a: i32, b: i32) -> i32 {
++    a * b
++}
++
++pub fn div(a: i32, b: i32) -> Result<i32, String> {
++    if b == 0 {
++        Err("division by zero".to_string())
++    } else {
++        Ok(a / b)
++    }
++}
+diff --git a/tests/integration.rs b/tests/integration.rs
+new file mode 100644
+index 0000000..96183d4
+--- /dev/null
++++ b/tests/integration.rs
+@@ -0,0 +1,17 @@
++use calc::{add, div, mul};
++
++#[test]
++fn add_works() {
++    assert_eq!(add(2, 3), 5);
++}
++
++#[test]
++fn mul_works() {
++    assert_eq!(mul(2, 3), 6);
++}
++
++#[test]
++fn div_works() {
++    assert_eq!(div(6, 3), Ok(2));
++    assert!(div(1, 0).is_err());
++}
