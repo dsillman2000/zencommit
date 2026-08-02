@@ -55,6 +55,14 @@ function fmtDeltaPct(current: number, baseline: number): string {
   return `${sign}${pct}pp`;
 }
 
+function scenarioSummary(config: BenchmarkConfig): string {
+  const enabled = config.scenarios.filter((s) => s.enabled).map((s) => s.name);
+  if (enabled.length === 0) return "no scenarios";
+  if (enabled.length === 1) return `Scenario: ${enabled[0]}`;
+  if (enabled.length <= 3) return `${enabled.length} scenarios: ${enabled.join(", ")}`;
+  return `${enabled.length} scenarios`;
+}
+
 interface TrialResult {
   trial: number;
   model: string;
@@ -66,9 +74,21 @@ interface TrialResult {
   };
 }
 
+interface ScenarioEntry {
+  name: string;
+  enabled: boolean;
+}
+
+interface BenchmarkConfig {
+  models: string[];
+  trialsPerModel: number;
+  spawnTimeoutMs: number;
+  scenarios: ScenarioEntry[];
+}
+
 interface AggregatedResults {
   timestamp: string;
-  config: { projectType: string; scenario: string; models: string[]; trialsPerModel: number };
+  config: BenchmarkConfig;
   trials: TrialResult[];
 }
 
@@ -424,7 +444,7 @@ function main(): void {
   // ─── Generate success rate grouped bar chart ─────────────────
 
   const successGroups = metrics.map((m) => {
-    const bars = [{ status: "this PR", value: m.successRate }];
+    const bars = [{ status: "current", value: m.successRate }];
     const bl = baselineMap[m.model];
     if (bl) bars.push({ status: "baseline", value: bl.successRate });
     return { label: m.model, bars };
@@ -433,14 +453,16 @@ function main(): void {
 
   // ─── Build report.md ─────────────────────────────────────────
 
-  const scenarioLabel = `${results.config.projectType}/${results.config.scenario}`;
-  const baselineLabel = baseline ? `\`${baseline.sha}\` from ${baseline.timestamp.slice(0, 10)}` : "none";
+  const baselineLabel = baseline
+    ? `\`${baseline.sha}\` from ${baseline.timestamp.slice(0, 10)}`
+    : "none (seed by running the evaluation workflow on the default branch)";
+  const scenarioLabel = scenarioSummary(results.config);
   const trialsPerModel = results.config.trialsPerModel;
 
   const lines: string[] = [
     "## Prompt Evaluation",
     "",
-    `**SHA:** \`${sha}\` · **Baseline:** ${baselineLabel} · **Scenario:** ${scenarioLabel} · **${trialsPerModel} trials/model**`,
+    `**SHA:** \`${sha}\` · **Baseline:** ${baselineLabel} · **${scenarioLabel} · ${trialsPerModel} trials/model**`,
     "",
     "| Model | Success | Wall p50 / p95 | Tokens p50 / p95 | Δ Rate | Δ Wall | Δ Tokens |",
     "|-------|:-------:|:--------------:|:----------------:|:------:|:------:|:--------:|",

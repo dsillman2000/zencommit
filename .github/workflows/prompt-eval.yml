@@ -1,8 +1,8 @@
 name: Prompt Evaluation
 on:
   pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [labeled]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   evaluate:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip:eval') }}
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run:eval')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +29,7 @@ jobs:
         run: npm ci
 
       - name: Install CML
+        if: github.event_name == 'pull_request'
         run: npm install -g @dvcorg/cml
 
       - name: Build
@@ -65,6 +66,7 @@ jobs:
         run: npx tsx scripts/evaluate.ts
 
       - name: Post CML comment
+        if: github.event_name == 'pull_request'
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: cml comment create report.md

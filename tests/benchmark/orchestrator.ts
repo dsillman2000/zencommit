@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, relative, resolve, dirname } from "node:path";
@@ -9,8 +9,12 @@ import { StatsReportSchema, type StatsReport } from "./stats-schema.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface ScenarioEntry {
-  id: string;
+  name: string;
   enabled: boolean;
+}
+
+interface ScenarioManifest {
+  prompt?: string;
 }
 
 interface BenchmarkConfig {
@@ -60,6 +64,10 @@ function projectRoot(): string {
   return resolve(__dirname, "..", "..");
 }
 
+function fixturesDir(): string {
+  return resolve(projectRoot(), "tests", "fixtures");
+}
+
 function readConfig(): BenchmarkConfig {
   const configPath = resolve(projectRoot(), "tests", "benchmark.config.json");
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
@@ -76,17 +84,17 @@ function readConfig(): BenchmarkConfig {
   };
 }
 
-interface ScenarioRef {
-  projectType: string;
-  scenarioName: string;
-}
-
-function parseScenarioId(id: string): ScenarioRef {
-  const parts = id.split("/");
-  return {
-    projectType: parts[0] ?? "unknown",
-    scenarioName: parts.slice(1).join("/"),
-  };
+async function readScenarioManifest(name: string): Promise<ScenarioManifest> {
+  const path = resolve(fixturesDir(), name, "scenario.json");
+  if (!existsSync(path)) {
+    return {};
+  }
+  const raw = await readFile(path, "utf-8");
+  try {
+    return JSON.parse(raw) as ScenarioManifest;
+  } catch {
+    return {};
+  }
 }
 
 function p50(arr: number[]): number {
@@ -159,6 +167,10 @@ export async function runBenchmark(): Promise<AggregatedResults> {
     throw new Error("No enabled scenarios in benchmark.config.json");
   }
 
+  const scenarioManifests = await Promise.all(
+    enabledScenarios.map((s) => readScenarioManifest(s.name)),
+  );
+
   const trials: TrialResult[] = [];
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const totalTrials = config.models.length * config.trialsPerModel;
@@ -168,19 +180,24 @@ export async function runBenchmark(): Promise<AggregatedResults> {
     for (let mi = 0; mi < config.models.length; mi++) {
       const model = config.models[mi];
       const si = (t + mi) % enabledScenarios.length;
-      const scenarioId = enabledScenarios[si].id;
-      const { projectType, scenarioName } = parseScenarioId(scenarioId);
-      const scenario = await loadScenario(projectType, scenarioName);
+      const scenarioName = enabledScenarios[si].name;
+      const manifest = scenarioManifests[si];
+      const scenario = await loadScenario(scenarioName);
       trialIndex++;
 
       process.stderr.write(
-        `  [${trialIndex}/${totalTrials}] ${model} trial ${t}/${config.trialsPerModel} (${scenarioId}) … `,
+        `  [${trialIndex}/${totalTrials}] ${model} trial ${t}/${config.trialsPerModel} (${scenarioName}) … `,
       );
+
+      const args = [cliPath, "--stats", "-m", model];
+      if (manifest.prompt) {
+        args.push("-p", manifest.prompt);
+      }
 
       const spawnStart = Date.now();
       const result = spawnSync(
         process.execPath,
-        [cliPath, "--stats", "-m", model],
+        args,
         {
           cwd: scenario.dir,
           timeout: config.spawnTimeoutMs,
