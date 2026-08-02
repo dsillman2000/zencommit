@@ -6,7 +6,7 @@ const config = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   testEnvironment: "node",
-  testMatch: ["**/*.integration.test.ts"],
+  testMatch: ["**/*.benchmark.test.ts"],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

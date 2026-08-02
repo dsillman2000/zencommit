@@ -49,7 +49,7 @@ export async function loadScenario(
     );
   }
 
-  const tmp = await mkdtemp(join(tmpdir(), "zc-integration-"));
+  const tmp = await mkdtemp(join(tmpdir(), "zc-benchmark-"));
 
   execSync(`tar -xzf "${tarball}" -C "${tmp}"`, { stdio: "pipe" });
 

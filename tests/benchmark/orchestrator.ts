@@ -13,7 +13,7 @@ interface ScenarioEntry {
   enabled: boolean;
 }
 
-interface IntegrationConfig {
+interface BenchmarkConfig {
   models: string[];
   trialsPerModel: number;
   spawnTimeoutMs: number;
@@ -49,7 +49,7 @@ interface ModelSummary {
 
 interface AggregatedResults {
   timestamp: string;
-  config: IntegrationConfig;
+  config: BenchmarkConfig;
   cwd: string;
   cliPath: string;
   trials: TrialResult[];
@@ -60,8 +60,8 @@ function projectRoot(): string {
   return resolve(__dirname, "..", "..");
 }
 
-function readConfig(): IntegrationConfig {
-  const configPath = resolve(projectRoot(), "tests", "integration.config.json");
+function readConfig(): BenchmarkConfig {
+  const configPath = resolve(projectRoot(), "tests", "benchmark.config.json");
   const raw = JSON.parse(readFileSync(configPath, "utf-8"));
   return {
     models: raw.models ?? [
@@ -144,7 +144,7 @@ function summarizeTrial(trial: TrialResult): string {
   return `FAIL  wall=${wall}`;
 }
 
-export async function runIntegration(): Promise<AggregatedResults> {
+export async function runBenchmark(): Promise<AggregatedResults> {
   const config = readConfig();
   const cliPath = resolve(projectRoot(), "dist", "index.js");
 
@@ -156,7 +156,7 @@ export async function runIntegration(): Promise<AggregatedResults> {
 
   const enabledScenarios = config.scenarios.filter((s) => s.enabled);
   if (enabledScenarios.length === 0) {
-    throw new Error("No enabled scenarios in integration.config.json");
+    throw new Error("No enabled scenarios in benchmark.config.json");
   }
 
   const trials: TrialResult[] = [];
@@ -319,7 +319,7 @@ export async function runIntegration(): Promise<AggregatedResults> {
   const resultsDir = resolve(
     projectRoot(),
     "tests",
-    "integration",
+    "benchmark",
     ".results",
   );
   await mkdir(resultsDir, { recursive: true });
@@ -327,7 +327,7 @@ export async function runIntegration(): Promise<AggregatedResults> {
   await writeFile(resultsFile, JSON.stringify(results, null, 2), "utf-8");
 
   // Print summary table
-  console.log("\n─── Integration Results ───");
+  console.log("\n─── Benchmark Results ───");
   console.log(`Results written to: ${relative(projectRoot(), resultsFile)}`);
   console.log("");
   console.log(

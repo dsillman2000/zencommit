@@ -1,16 +1,16 @@
 import { describe, it, expect } from "@jest/globals";
-import { runIntegration } from "./orchestrator.js";
+import { runBenchmark } from "./orchestrator.js";
 
-const RUN_INTEGRATION = Boolean(process.env.RUN_INTEGRATION_TESTS);
+const RUN_BENCHMARK = Boolean(process.env.RUN_BENCHMARK_TESTS);
 
-describe("zencommit integration", () => {
-  if (!RUN_INTEGRATION) {
-    it("skipped — set RUN_INTEGRATION_TESTS=1 to run", () => {});
+describe("zencommit benchmark", () => {
+  if (!RUN_BENCHMARK) {
+    it("skipped — set RUN_BENCHMARK_TESTS=1 to run", () => {});
     return;
   }
 
   it("runs robustness and performance benchmarks against real models", async () => {
-      const results = await runIntegration();
+      const results = await runBenchmark();
 
       expect(results.trials.length).toBe(
         results.config.models.length * results.config.trialsPerModel,

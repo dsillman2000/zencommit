@@ -126,7 +126,7 @@ function computeMetrics(results: AggregatedResults): ModelMetrics[] {
 }
 
 function findLatestResults(): AggregatedResults | null {
-  const resultsDir = projectPath("tests", "integration", ".results");
+  const resultsDir = projectPath("tests", "benchmark", ".results");
   if (!existsSync(resultsDir)) return null;
 
   const files = readdirSync(resultsDir)
@@ -375,7 +375,7 @@ function main(): void {
 
   const results = findLatestResults();
   if (!results) {
-    console.error("evaluate: no results found in tests/integration/.results/");
+    console.error("evaluate: no results found in tests/benchmark/.results/");
     process.exit(1);
   }
   console.error(`evaluate: loaded results from ${results.timestamp}`);

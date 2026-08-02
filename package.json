@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
-    "test:integration": "node --experimental-vm-modules node_modules/.bin/jest --config jest.integration.config.js"
+    "test:benchmark": "node --experimental-vm-modules node_modules/.bin/jest --config jest.benchmark.config.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.10",

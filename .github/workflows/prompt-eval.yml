@@ -56,10 +56,10 @@ jobs:
           writeFileSync(join(dir, 'config.json'), JSON.stringify({ key: process.env.OPENCODE_ZEN_API_KEY }, null, 2));
           "
 
-      - name: Run integration tests
+      - name: Run benchmark tests
         env:
-          RUN_INTEGRATION_TESTS: "1"
-        run: npm run test:integration
+          RUN_BENCHMARK_TESTS: "1"
+        run: npm run test:benchmark
 
       - name: Generate evaluation report
         run: npx tsx scripts/evaluate.ts
