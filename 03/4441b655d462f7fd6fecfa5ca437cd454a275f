@@ -1,0 +1,21 @@
+tests/fixtures/simple-math-subtractor-ts/scenario.json
+  s_590e0bae456cc9::t_e3275b2a125833 1
+tests/fixtures/simple-math-subtractor-ts/changes.patch
+  s_590e0bae456cc9::t_e3275b2a125833 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "034441b655d462f7fd6fecfa5ca437cd454a275f",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
