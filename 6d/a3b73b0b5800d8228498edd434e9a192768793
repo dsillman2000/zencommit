@@ -1,0 +1,28 @@
+README.md
+  s_376353d0fed6fb::t_0b2a7964733439 101-113
+  s_376353d0fed6fb::t_02adb8e2b643cd 3,5-6
+  h_4cc74772b10fd4 4
+docs/zencommit-logo.svg
+  h_4cc74772b10fd4 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "6da3b73b0b5800d8228498edd434e9a192768793",
+  "prompts": {},
+  "humans": {
+    "h_4cc74772b10fd4": {
+      "author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  },
+  "sessions": {
+    "s_376353d0fed6fb": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0405b4825ffeIJ2DTyUKAgx51j",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
