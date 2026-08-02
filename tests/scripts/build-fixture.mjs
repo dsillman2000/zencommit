@@ -79,13 +79,13 @@ async function buildScenario(projectType, name) {
 }
 
 async function main() {
-  const configPath = join(ROOT, "tests", "integration.config.json");
+  const configPath = join(ROOT, "tests", "benchmark.config.json");
   const config = JSON.parse(await readFile(configPath, "utf-8"));
 
   const enabled = (config.scenarios ?? []).filter((s) => s.enabled);
 
   if (enabled.length === 0) {
-    console.log("No enabled scenarios found in integration.config.json");
+    console.log("No enabled scenarios found in benchmark.config.json");
     return;
   }
 

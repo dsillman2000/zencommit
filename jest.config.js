@@ -7,7 +7,7 @@ const config = {
   },
   testEnvironment: "node",
    testMatch: ["**/*.test.ts"],
-   testPathIgnorePatterns: ["/node_modules/", "\\.integration\\.test\\.ts$", "tests/fixtures/"],
+    testPathIgnorePatterns: ["/node_modules/", "\\.benchmark\\.test\\.ts$", "tests/fixtures/"],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
