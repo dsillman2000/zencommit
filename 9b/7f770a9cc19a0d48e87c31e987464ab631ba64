@@ -1,0 +1,23 @@
+tests/benchmark/orchestrator.ts
+  s_590e0bae456cc9::t_fbf37a4d2a37d3 1,12,16-19,67-70,87-97,170-173,183-185,189,192-196,200
+tests/benchmark.config.json
+  s_590e0bae456cc9::t_0918bbae59a6b0 12
+tests/benchmark/fixtures.ts
+  s_590e0bae456cc9::t_03743141b28be9 26,31,38-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "9b7f770a9cc19a0d48e87c31e987464ab631ba64",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
