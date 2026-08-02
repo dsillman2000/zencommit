@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cp, mkdir, readFile, rm, writeFile, stat, readdir } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -9,73 +9,50 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "..");
 
-async function buildScenario(projectType, name) {
-  const fixtures = join(ROOT, "tests", "fixtures", projectType);
-  const base = join(fixtures, "base");
-  const scenarioDir = join(fixtures, "scenarios", name);
-  const tarball = join(fixtures, "scenarios", `${name}.tar.gz`);
-  const tmp = join(fixtures, "scenarios", `.build-${name}`);
+async function buildScenario(name) {
+  const fixtureDir = join(ROOT, "tests", "fixtures", name);
+  const beforeTarball = join(fixtureDir, "before.tar.gz");
+  const patchFile = join(fixtureDir, "changes.patch");
+  const scenarioJson = join(fixtureDir, "scenario.json");
+  const outTarball = join(fixtureDir, "scenario.tar.gz");
+  const tmp = join(fixtureDir, `.build-${name}`);
 
-  console.log(`Building scenario "${projectType}/${name}"…`);
+  console.log(`Building scenario "${name}"…`);
+
+  if (!existsSync(beforeTarball)) {
+    throw new Error(`Missing before state: ${beforeTarball}`);
+  }
+  if (!existsSync(patchFile)) {
+    throw new Error(`Missing changes patch: ${patchFile}`);
+  }
+  if (!existsSync(scenarioJson)) {
+    throw new Error(`Missing scenario manifest: ${scenarioJson}`);
+  }
 
   await rm(tmp, { recursive: true, force: true });
   await mkdir(tmp, { recursive: true });
 
-  await cp(base, tmp, { recursive: true });
+  // Extract before state
+  execSync(`tar -xzf "${beforeTarball}" -C "${tmp}"`, { stdio: "pipe" });
 
+  // Initialize git and commit the before state
   execSync("git init", { cwd: tmp });
   execSync('git config user.email "test@example.com"', { cwd: tmp });
   execSync('git config user.name "Test"', { cwd: tmp });
-
   execSync("git add .", { cwd: tmp });
   execSync('git commit -m "init: scaffold project structure"', { cwd: tmp });
 
-  const readmePath = join(tmp, "README.md");
-  const readme = await readFile(readmePath, "utf-8");
-  await writeFile(readmePath, readme + "\n\nSecond version with documentation updates.\n");
-  execSync("git add -A", { cwd: tmp });
-  execSync('git commit -m "docs: update project documentation"', { cwd: tmp });
-
-  if (existsSync(scenarioDir)) {
-    await cp(scenarioDir, tmp, {
-      recursive: true,
-      filter: (src) => {
-        const rel = src.startsWith(scenarioDir)
-          ? src.slice(scenarioDir.length + 1)
-          : "";
-        return !rel.startsWith(".") && rel !== "deleted.txt" && rel !== "staged.txt";
-      },
-    });
-  }
-
-  const deletedListPath = join(scenarioDir, "deleted.txt");
-  if (existsSync(deletedListPath)) {
-    const toDelete = (await readFile(deletedListPath, "utf-8"))
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-    for (const f of toDelete) {
-      try { await rm(join(tmp, f)); } catch { }
-    }
-  }
-
-  const stagedListPath = join(scenarioDir, "staged.txt");
-  if (existsSync(stagedListPath)) {
-    const toStage = (await readFile(stagedListPath, "utf-8"))
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-    for (const f of toStage) {
-      execSync(`git add "${f}"`, { cwd: tmp });
-    }
-  }
+  // Apply changes patch
+  const patch = await readFile(patchFile, "utf-8");
+  execSync("git apply -", { cwd: tmp, input: patch });
 
   console.log(execSync("git status --short", { cwd: tmp, encoding: "utf-8" }));
 
-  execSync(`tar -czf "${tarball}" -C "${tmp}" .`, { cwd: tmp });
+  // Create the built scenario tarball
+  execSync(`tar -czf "${outTarball}" -C "${tmp}" .`, { cwd: tmp });
 
   await rm(tmp, { recursive: true, force: true });
-  console.log(`  → ${tarball} (${(await stat(tarball)).size} bytes)`);
+  console.log(`  → ${outTarball} (${(await stat(outTarball)).size} bytes)`);
 }
 
 async function main() {
@@ -90,12 +67,11 @@ async function main() {
   }
 
   for (const scenario of enabled) {
-    const [projectType, scenarioName] = scenario.id.split("/");
-    if (!projectType || !scenarioName) {
-      console.error(`Invalid scenario id: "${scenario.id}" — expected "<projectType>/<scenarioName>"`);
+    if (!scenario.name) {
+      console.error(`Invalid scenario: missing "name"`);
       continue;
     }
-    await buildScenario(projectType, scenarioName);
+    await buildScenario(scenario.name);
   }
 }
 
