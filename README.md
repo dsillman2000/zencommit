@@ -1,5 +1,9 @@
 # zencommit
 
+<p align="center">
+  <img src="docs/zencommit-logo.svg" alt="zencommit logo" width="108" height="60">
+</p>
+
 AI-powered commit message generator using the [OpenCode Zen API](https://opencode.ai). Analyzes staged and unstaged changes in a git repo, generates conventional commits, and lets you review and revise before committing.
 
 ## Install
@@ -94,12 +98,19 @@ zencommit models
 Example output:
 
 ```
-Model ID                Input/1M    Output/1M
-────────────────────────────────────────────────
-claude-sonnet-4           $3.00      $15.00
-deepseek-v4-flash         $0.14       $0.28
-gpt-5.4-mini              $0.75       $4.50
-north-mini-code-free       Free        Free
+Model ID               Input/1M    Output/1M  Variants
+─────────────────────────────────────────────────────────────────────
+claude-sonnet-4           $3.00      $15.00   default (default)
+deepseek-v4-flash         $0.14       $0.28   off (default)
+                                               high
+                                               max
+gpt-5.4-mini              $0.75       $4.50   none (default)
+                                               low
+                                               medium
+                                               high
+                                               xhigh
+north-mini-code-free       Free        Free   none (default)
+                                               high
 ```
 
 Model data is fetched from [models.dev](https://models.dev/providers/opencode/) and cached locally for up to 6 hours.
@@ -114,7 +125,3 @@ Model data is fetched from [models.dev](https://models.dev/providers/opencode/) 
 ## Project conventions
 
 Place an `AGENTS.md` file in your repository root to provide your own project-specific commit conventions. zencommit appends it to the system prompt when generating messages.
-
----
-
-*Made with ❤️ in Boston.*
