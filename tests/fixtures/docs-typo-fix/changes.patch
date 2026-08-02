@@ -1,0 +1,19 @@
+diff --git a/README.md b/README.md
+index ddefeeb..bd18789 100644
+--- a/README.md
++++ b/README.md
+@@ -4,10 +4,10 @@ A general-purpose toolkit that helps build reproducible workflows.
+ 
+ ## Features
+ 
+-- Recieve webhooks from external services and re-route them internally.
+-- Manage candleing sessions safely with automatic rechanrgeable backups.
+-- Generate dynamic configurtion snippets for cloud and edge workloads.
++- Receive webhooks from external services and re-route them internally.
++- Manage caddling sessions safely with automatic rechargeable backups.
++- Generate dynamic configuration snippets for cloud and edge workloads.
+ 
+ ## Going Further
+ 
+-This documenet covers the common path. For advance usage see the cookbook.
++This document covers the common path. For advanced usage see the cookbook.
