@@ -1,0 +1,21 @@
+tests/fixtures/go-cli-rename/changes.patch
+  s_590e0bae456cc9::t_6fbbad0465b8cd 1-45
+tests/fixtures/go-cli-rename/scenario.json
+  s_590e0bae456cc9::t_6fbbad0465b8cd 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e3354e8bc11bb44018c424bbd755d37b263c3fa0",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
