@@ -1,0 +1,45 @@
+tests/benchmark/benchmark.test.ts
+  s_590e0bae456cc9::t_6f1283f1fcaf82 1-53
+tests/benchmark/orchestrator.ts
+  s_590e0bae456cc9::t_1ceb4c67dd01cf 1-358
+tests/scripts/build-fixture.mjs
+  s_590e0bae456cc9::t_de226aab73ef31 82,88
+scripts/evaluate.ts
+  s_590e0bae456cc9::t_ea8abce0a8423b 378
+  s_590e0bae456cc9::t_d14bc3797550b5 129
+jest.benchmark.config.js
+  s_590e0bae456cc9::t_fd2ec670cf99d1 1-25
+tests/benchmark/.gitignore
+  s_590e0bae456cc9::t_75f9eb77b4523b 1
+jest.config.js
+  s_590e0bae456cc9::t_baf40e01796207 10
+tests/benchmark/stats-schema.ts
+  s_590e0bae456cc9::t_5401ac809f5ee9 1-110
+AGENTS.md
+  s_590e0bae456cc9::t_8c37f259a287b6 46-48
+  s_590e0bae456cc9::t_f8e9b32f7647d0 17
+tests/benchmark/fixtures.ts
+  s_590e0bae456cc9::t_9578844c1a1503 1-60
+.github/workflows/prompt-eval.yml
+  s_590e0bae456cc9::t_0e2bb012c57691 59,61-62
+tests/benchmark.config.json
+  s_590e0bae456cc9::t_c371f99ad0ed6a 1-16
+package.json
+  s_590e0bae456cc9::t_68fc7d504aa5a5 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "1c0f9549e42bfc3242b904b8d5f64ba38cef568f",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
