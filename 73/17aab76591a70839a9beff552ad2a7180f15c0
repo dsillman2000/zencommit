@@ -1,0 +1,19 @@
+.github/workflows/prompt-eval.yml
+  s_590e0bae456cc9::t_801556f8b86dad 4-5,18,32,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7317aab76591a70839a9beff552ad2a7180f15c0",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
