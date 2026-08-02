@@ -1,0 +1,21 @@
+tests/fixtures/rust-cargo-feature/scenario.json
+  s_590e0bae456cc9::t_16c3b709da2ecb 1-3
+tests/fixtures/rust-cargo-feature/changes.patch
+  s_590e0bae456cc9::t_16c3b709da2ecb 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "ab3a669ce9db30c72248709b55fa10fc53c106d9",
+  "prompts": {},
+  "sessions": {
+    "s_590e0bae456cc9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_03d2e84a0ffeZHHK4NBLOjLh5Y",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "dsillman2000 <dsillman2000@yahoo.com>"
+    }
+  }
+}
